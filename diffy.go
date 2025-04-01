@@ -50,7 +50,7 @@ func WithGitHubIssueCreation() SchemaValidatorOption {
 func ValidateSchema(options ...SchemaValidatorOption) ([]ValidationFinding, error) {
 	// Default options
 	opts := &SchemaValidatorOptions{
-		TerraformRoot:     "../../",
+		// TerraformRoot:     "../../",
 		Logger:            &SimpleLogger{},
 		CreateGitHubIssue: false,
 		Silent:            false,
