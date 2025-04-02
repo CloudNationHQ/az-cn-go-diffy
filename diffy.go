@@ -45,12 +45,10 @@ func WithGitHubIssueCreation() SchemaValidatorOption {
 	}
 }
 
-
 // ValidateSchema validates Terraform schema with the specified options
 func ValidateSchema(options ...SchemaValidatorOption) ([]ValidationFinding, error) {
-	// Default options
+	// Initialize with minimal defaults
 	opts := &SchemaValidatorOptions{
-		// TerraformRoot:     "../../",
 		Logger:            &SimpleLogger{},
 		CreateGitHubIssue: false,
 		Silent:            false,
@@ -59,6 +57,16 @@ func ValidateSchema(options ...SchemaValidatorOption) ([]ValidationFinding, erro
 	// Apply options
 	for _, option := range options {
 		option(opts)
+	}
+
+	// Check for TERRAFORM_ROOT environment variable (highest priority)
+	if envRoot := os.Getenv("TERRAFORM_ROOT"); envRoot != "" {
+		opts.TerraformRoot = envRoot
+	}
+
+	// Validate TerraformRoot is set
+	if opts.TerraformRoot == "" {
+		return nil, fmt.Errorf("terraform root path not specified - set TERRAFORM_ROOT environment variable or use WithTerraformRoot option")
 	}
 
 	// Validate Terraform project
