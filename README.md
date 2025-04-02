@@ -84,7 +84,7 @@ Identifies both missing required and optional properties.
 
 Diffy supports a functional options pattern for configuration:
 
-`WithTerraformRoot(path):` Sets the root directory for Terraform files (defaults to "../../" if not specified)
+`WithTerraformRoot(path):` Sets the root directory for Terraform files
 
 `WithGitHubIssueCreation():` Enables GitHub issue creation based on validation findings
 
