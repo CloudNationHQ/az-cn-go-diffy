@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/CloudNationHQ/az-cn-go-diffy/compare/v1.1.0...v1.1.1) (2025-05-15)
+
+
+### Bug Fixes
+
+* delete github issue when no differences are detected ([#9](https://github.com/CloudNationHQ/az-cn-go-diffy/issues/9)) ([6f82ba0](https://github.com/CloudNationHQ/az-cn-go-diffy/commit/6f82ba07e322d56e4ef0add52a5c9424ca3b98e3))
+
 ## [1.1.0](https://github.com/CloudNationHQ/az-cn-go-diffy/compare/v1.0.2...v1.1.0) (2025-05-15)
 
 
