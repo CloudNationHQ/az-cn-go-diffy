@@ -51,17 +51,19 @@ type SchemaBlock struct {
 
 // SchemaAttribute defines an attribute in a schema
 type SchemaAttribute struct {
-	Required bool `json:"required"`
-	Optional bool `json:"optional"`
-	Computed bool `json:"computed"`
+	Required   bool `json:"required"`
+	Optional   bool `json:"optional"`
+	Computed   bool `json:"computed"`
+	Deprecated bool `json:"deprecated"`
 }
 
 // SchemaBlockType defines a nested block type
 type SchemaBlockType struct {
-	Nesting  string       `json:"nesting"`
-	MinItems int          `json:"min_items"`
-	MaxItems int          `json:"max_items"`
-	Block    *SchemaBlock `json:"block"`
+	Nesting    string       `json:"nesting"`
+	MinItems   int          `json:"min_items"`
+	MaxItems   int          `json:"max_items"`
+	Block      *SchemaBlock `json:"block"`
+	Deprecated bool         `json:"deprecated"`
 }
 
 // ValidationFinding represents a finding during validation

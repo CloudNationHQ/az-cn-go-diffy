@@ -115,6 +115,10 @@ func (bd *BlockData) validateAttributes(
 			continue
 		}
 
+		if attr.Deprecated {
+			continue
+		}
+
 		if isIgnored(ignore, name) {
 			continue
 		}
@@ -140,6 +144,10 @@ func (bd *BlockData) validateBlocks(
 ) {
 	for name, blockType := range schema.BlockTypes {
 		if name == "timeouts" || isIgnored(ignore, name) {
+			continue
+		}
+
+		if blockType.Deprecated {
 			continue
 		}
 
