@@ -96,6 +96,24 @@ func (g *GitHubIssueManager) CreateOrUpdateIssue(ctx context.Context, findings [
 	return g.createIssue(ctx, title, finalBody)
 }
 
+// CloseExistingIssuesIfEmpty finds and closes existing validation issues when there are no findings
+func (g *GitHubIssueManager) CloseExistingIssuesIfEmpty(ctx context.Context) error {
+	// Search for existing schema validation issues that are open
+	title := "Generated schema validation"
+	issueNum, _, err := g.findExistingIssue(ctx, title)
+	if err != nil {
+		return fmt.Errorf("error finding existing issues: %w", err)
+	}
+
+	// If there's no existing issue, nothing to do
+	if issueNum <= 0 {
+		return nil
+	}
+
+	// Close the issue since there are no more findings
+	return g.closeIssue(ctx, issueNum, "All schema validation issues have been resolved. Closing this issue automatically.")
+}
+
 // findExistingIssue finds an existing GitHub issue with the given title
 func (g *GitHubIssueManager) findExistingIssue(ctx context.Context, title string) (int, string, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?state=open", g.RepoOwner, g.RepoName)
@@ -204,6 +222,82 @@ func (g *GitHubIssueManager) createIssue(ctx context.Context, title, body string
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("GitHub API error: %s, response: %s", resp.Status, string(body))
+	}
+
+	return nil
+}
+
+// closeIssue closes an existing GitHub issue with a comment
+func (g *GitHubIssueManager) closeIssue(ctx context.Context, issueNumber int, comment string) error {
+	// First add a comment explaining why we're closing the issue
+	if comment != "" {
+		if err := g.addComment(ctx, issueNumber, comment); err != nil {
+			return fmt.Errorf("failed to add closing comment: %w", err)
+		}
+	}
+
+	// Then close the issue
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d", g.RepoOwner, g.RepoName, issueNumber)
+	payload := struct {
+		State string `json:"state"`
+	}{State: "closed"}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "token "+g.Token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := g.Client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("GitHub API error when closing issue: %s, response: %s", resp.Status, string(body))
+	}
+
+	return nil
+}
+
+// addComment adds a comment to an existing GitHub issue
+func (g *GitHubIssueManager) addComment(ctx context.Context, issueNumber int, comment string) error {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d/comments", g.RepoOwner, g.RepoName, issueNumber)
+	payload := struct {
+		Body string `json:"body"`
+	}{Body: comment}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(data))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "token "+g.Token)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := g.Client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("GitHub API error when adding comment: %s, response: %s", resp.Status, string(body))
 	}
 
 	return nil
