@@ -80,11 +80,11 @@ func ValidateSchema(options ...SchemaValidatorOption) ([]ValidationFinding, erro
 		outputFindings(findings)
 	}
 
-	// Create GitHub issue if enabled
-	if opts.CreateGitHubIssue && len(findings) > 0 {
+	// Always check GitHub issue creation when enabled, even with no findings
+	if opts.CreateGitHubIssue {
 		ctx := context.Background()
 		if err := createGitHubIssue(ctx, opts, findings); err != nil {
-			opts.Logger.Logf("Failed to create GitHub issue: %v", err)
+			opts.Logger.Logf("Failed to create/update GitHub issue: %v", err)
 		}
 	}
 
@@ -149,11 +149,6 @@ func outputFindings(findings []ValidationFinding) {
 
 // createGitHubIssue creates a GitHub issue with validation findings
 func createGitHubIssue(ctx context.Context, opts *SchemaValidatorOptions, findings []ValidationFinding) error {
-	// Skip if no findings
-	if len(findings) == 0 {
-		return nil
-	}
-
 	// Get GitHub token
 	if opts.GitHubToken == "" {
 		return fmt.Errorf("GitHub token not provided")
@@ -173,6 +168,11 @@ func createGitHubIssue(ctx context.Context, opts *SchemaValidatorOptions, findin
 
 	// Create issue manager
 	issueManager := NewGitHubIssueManager(owner, repo, opts.GitHubToken)
+
+	// If no findings, check if there's an existing issue to close
+	if len(findings) == 0 {
+		return issueManager.CloseExistingIssuesIfEmpty(ctx)
+	}
 
 	// Create or update issue
 	return issueManager.CreateOrUpdateIssue(ctx, findings)
