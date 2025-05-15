@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/CloudNationHQ/az-cn-go-diffy/compare/v1.0.2...v1.1.0) (2025-05-15)
+
+
+### Features
+
+* ignore deprecated properties and blocks ([#7](https://github.com/CloudNationHQ/az-cn-go-diffy/issues/7)) ([21a60cd](https://github.com/CloudNationHQ/az-cn-go-diffy/commit/21a60cdb8977a2c476bc074d9bddc51ef3e0347c))
+
 ## [1.0.2](https://github.com/CloudNationHQ/az-cn-go-diffy/compare/v1.0.1...v1.0.2) (2025-04-02)
 
 
