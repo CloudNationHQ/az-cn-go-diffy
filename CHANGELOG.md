@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/CloudNationHQ/az-cn-go-diffy/compare/v1.1.1...v1.2.0) (2025-09-10)
+
+
+### Features
+
+* add workflow templates ([#13](https://github.com/CloudNationHQ/az-cn-go-diffy/issues/13)) ([ddf7a83](https://github.com/CloudNationHQ/az-cn-go-diffy/commit/ddf7a835a4d439c4d3678bf16c0d868a7903c677))
+* refactor and added resource and data source exclusion support with environment variables ([#11](https://github.com/CloudNationHQ/az-cn-go-diffy/issues/11)) ([f91bd46](https://github.com/CloudNationHQ/az-cn-go-diffy/commit/f91bd460a3910bccd9d2d67be323ae4839d672f5))
+
 ## [1.1.1](https://github.com/CloudNationHQ/az-cn-go-diffy/compare/v1.1.0...v1.1.1) (2025-05-15)
 
 
