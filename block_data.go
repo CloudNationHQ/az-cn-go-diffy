@@ -5,10 +5,8 @@ import (
 	"strings"
 
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"golang.org/x/exp/slices"
 )
 
-// NewBlockData creates a new empty BlockData
 func NewBlockData() BlockData {
 	return BlockData{
 		Properties:    make(map[string]bool),
@@ -18,14 +16,12 @@ func NewBlockData() BlockData {
 	}
 }
 
-// ParseAttributes extracts attributes from a hclsyntax.Body
 func (bd *BlockData) ParseAttributes(body *hclsyntax.Body) {
 	for name := range body.Attributes {
 		bd.Properties[name] = true
 	}
 }
 
-// ParseBlocks processes all blocks in a hclsyntax.Body
 func (bd *BlockData) ParseBlocks(body *hclsyntax.Body) {
 	directIgnoreChanges := extractLifecycleIgnoreChangesFromAST(body)
 	if len(directIgnoreChanges) > 0 {
@@ -41,13 +37,12 @@ func (bd *BlockData) ParseBlocks(body *hclsyntax.Body) {
 				bd.parseDynamicBlock(block.Body, block.Labels[0])
 			}
 		default:
-			parsed := ParseSyntaxBodyFromParser(block.Body)
+			parsed := ParseSyntaxBody(block.Body)
 			bd.StaticBlocks[block.Type] = parsed
 		}
 	}
 }
 
-// parseLifecycle extracts ignore_changes from a lifecycle block
 func (bd *BlockData) parseLifecycle(body *hclsyntax.Body) {
 	for name, attr := range body.Attributes {
 		if name == "ignore_changes" {
@@ -60,10 +55,9 @@ func (bd *BlockData) parseLifecycle(body *hclsyntax.Body) {
 	}
 }
 
-// parseDynamicBlock processes a dynamic block
 func (bd *BlockData) parseDynamicBlock(body *hclsyntax.Body, name string) {
 	contentBlock := findContentBlockInBody(body)
-	parsed := ParseSyntaxBodyFromParser(contentBlock)
+	parsed := ParseSyntaxBody(contentBlock)
 	if existing := bd.DynamicBlocks[name]; existing != nil {
 		mergeBlocks(existing, parsed)
 	} else {
@@ -71,7 +65,6 @@ func (bd *BlockData) parseDynamicBlock(body *hclsyntax.Body, name string) {
 	}
 }
 
-// findContentBlockInBody finds the content block within a dynamic block
 func findContentBlockInBody(body *hclsyntax.Body) *hclsyntax.Body {
 	for _, b := range body.Blocks {
 		if b.Type == "content" {
@@ -81,7 +74,6 @@ func findContentBlockInBody(body *hclsyntax.Body) *hclsyntax.Body {
 	return body
 }
 
-// Validate recursively validates a block against its schema
 func (bd *BlockData) Validate(
 	resourceType, path string,
 	schema *SchemaBlock,
@@ -92,14 +84,14 @@ func (bd *BlockData) Validate(
 		return
 	}
 
-	ignore := slices.Clone(parentIgnore)
+	ignore := make([]string, len(parentIgnore), len(parentIgnore)+len(bd.IgnoreChanges))
+	copy(ignore, parentIgnore)
 	ignore = append(ignore, bd.IgnoreChanges...)
 
 	bd.validateAttributes(resourceType, path, schema, ignore, findings)
 	bd.validateBlocks(resourceType, path, schema, ignore, findings)
 }
 
-// validateAttributes checks for missing required attributes
 func (bd *BlockData) validateAttributes(
 	resType, path string,
 	schema *SchemaBlock,
@@ -135,7 +127,6 @@ func (bd *BlockData) validateAttributes(
 	}
 }
 
-// validateBlocks checks for missing required blocks
 func (bd *BlockData) validateBlocks(
 	resType, path string,
 	schema *SchemaBlock,
@@ -177,24 +168,11 @@ func (bd *BlockData) validateBlocks(
 	}
 }
 
-// ParseSyntaxBodyFromParser is a wrapper that calls the parser's ParseSyntaxBody
-func ParseSyntaxBodyFromParser(body *hclsyntax.Body) *ParsedBlock {
-	bd := NewBlockData()
-	blk := &ParsedBlock{Data: bd}
-	bd.ParseAttributes(body)
-	bd.ParseBlocks(body)
-	return blk
-}
-
-// Helper functions
-
-// isIgnored checks if a property should be ignored
 func isIgnored(ignore []string, name string) bool {
-	if slices.Contains(ignore, "*all*") {
-		return true
-	}
-
 	for _, item := range ignore {
+		if item == "*all*" {
+			return true
+		}
 		if strings.EqualFold(item, name) {
 			return true
 		}
@@ -202,7 +180,6 @@ func isIgnored(ignore []string, name string) bool {
 	return false
 }
 
-// mergeBlocks combines two parsed blocks
 func mergeBlocks(dest, src *ParsedBlock) {
 	for k := range src.Data.Properties {
 		dest.Data.Properties[k] = true
@@ -226,7 +203,3 @@ func mergeBlocks(dest, src *ParsedBlock) {
 
 	dest.Data.IgnoreChanges = append(dest.Data.IgnoreChanges, src.Data.IgnoreChanges...)
 }
-
-// extractIgnoreChanges is imported from parser.go
-// findContentBlock is imported from parser.go
-// extractLifecycleIgnoreChangesFromAST is imported from parser.go

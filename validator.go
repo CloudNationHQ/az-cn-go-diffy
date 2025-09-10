@@ -4,22 +4,20 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
-// DefaultSchemaValidator implements SchemaValidator
 type DefaultSchemaValidator struct {
 	logger Logger
 }
 
-// NewSchemaValidator creates a new schema validator
 func NewSchemaValidator(logger Logger) *DefaultSchemaValidator {
 	return &DefaultSchemaValidator{
 		logger: logger,
 	}
 }
 
-// ValidateResources validates resources against a schema
 func (v *DefaultSchemaValidator) ValidateResources(
 	resources []ParsedResource,
 	schema TerraformSchema,
@@ -70,7 +68,6 @@ func (v *DefaultSchemaValidator) ValidateResources(
 	return findings
 }
 
-// ValidateDataSources validates data sources against a schema
 func (v *DefaultSchemaValidator) ValidateDataSources(
 	dataSources []ParsedDataSource,
 	schema TerraformSchema,
@@ -122,36 +119,37 @@ func (v *DefaultSchemaValidator) ValidateDataSources(
 	return findings
 }
 
-// ValidateTerraformSchema validates a directory against Terraform schema
 func ValidateTerraformSchema(logger Logger, dir, submoduleName string, parser HCLParser, runner TerraformRunner) ([]ValidationFinding, error) {
+	return ValidateTerraformSchemaWithOptions(logger, dir, submoduleName, parser, runner, nil, nil)
+}
+
+func ValidateTerraformSchemaWithOptions(logger Logger, dir, submoduleName string, parser HCLParser, runner TerraformRunner, excludedResources, excludedDataSources []string) ([]ValidationFinding, error) {
 	ctx := context.Background()
 
-	// Parse provider requirements
 	tfFile := filepath.Join(dir, "terraform.tf")
 	providers, err := parser.ParseProviderRequirements(ctx, tfFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse provider config in %s: %w", dir, err)
 	}
 
-	// Initialize terraform
 	if err := runner.Init(ctx, dir); err != nil {
 		return nil, err
 	}
 
-	// Get schema
 	tfSchema, err := runner.GetSchema(ctx, dir)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse main file
 	mainTf := filepath.Join(dir, "main.tf")
 	resources, dataSources, err := parser.ParseMainFile(ctx, mainTf)
 	if err != nil {
 		return nil, fmt.Errorf("parseMainFile in %s: %w", dir, err)
 	}
 
-	// Validate resources and data sources
+	resources = filterResources(resources, excludedResources)
+	dataSources = filterDataSources(dataSources, excludedDataSources)
+
 	validator := NewSchemaValidator(logger)
 	var findings []ValidationFinding
 	findings = append(findings, validator.ValidateResources(resources, *tfSchema, providers, dir, submoduleName)...)
@@ -160,10 +158,37 @@ func ValidateTerraformSchema(logger Logger, dir, submoduleName string, parser HC
 	return findings, nil
 }
 
-// DeduplicateFindings removes duplicate findings
+func filterResources(resources []ParsedResource, excluded []string) []ParsedResource {
+	if len(excluded) == 0 {
+		return resources
+	}
+	
+	var filtered []ParsedResource
+	for _, r := range resources {
+		if !slices.Contains(excluded, r.Type) {
+			filtered = append(filtered, r)
+		}
+	}
+	return filtered
+}
+
+func filterDataSources(dataSources []ParsedDataSource, excluded []string) []ParsedDataSource {
+	if len(excluded) == 0 {
+		return dataSources
+	}
+	
+	var filtered []ParsedDataSource
+	for _, ds := range dataSources {
+		if !slices.Contains(excluded, ds.Type) {
+			filtered = append(filtered, ds)
+		}
+	}
+	return filtered
+}
+
 func DeduplicateFindings(findings []ValidationFinding) []ValidationFinding {
-	seen := make(map[string]bool)
-	var result []ValidationFinding
+	seen := make(map[string]struct{})
+	result := make([]ValidationFinding, 0, len(findings))
 
 	for _, f := range findings {
 		key := fmt.Sprintf("%s|%s|%s|%v|%v|%s",
@@ -175,8 +200,8 @@ func DeduplicateFindings(findings []ValidationFinding) []ValidationFinding {
 			f.SubmoduleName,
 		)
 
-		if !seen[key] {
-			seen[key] = true
+		if _, exists := seen[key]; !exists {
+			seen[key] = struct{}{}
 			result = append(result, f)
 		}
 	}
@@ -184,7 +209,6 @@ func DeduplicateFindings(findings []ValidationFinding) []ValidationFinding {
 	return result
 }
 
-// FormatFinding formats a validation finding as a string
 func FormatFinding(f ValidationFinding) string {
 	cleanPath := strings.ReplaceAll(f.Path, "root.", "")
 

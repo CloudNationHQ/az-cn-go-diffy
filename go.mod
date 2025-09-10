@@ -5,7 +5,6 @@ go 1.24.1
 require (
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/zclconf/go-cty v1.16.2
-	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394
 )
 
 require (
