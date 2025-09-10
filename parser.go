@@ -12,27 +12,22 @@ import (
 	"github.com/zclconf/go-cty/cty"
 )
 
-// HCLParser parses Terraform HCL files
 type HCLParser interface {
 	ParseProviderRequirements(ctx context.Context, filename string) (map[string]ProviderConfig, error)
 	ParseMainFile(ctx context.Context, filename string) ([]ParsedResource, []ParsedDataSource, error)
 }
 
-// TerraformRunner runs Terraform commands
 type TerraformRunner interface {
 	Init(ctx context.Context, dir string) error
 	GetSchema(ctx context.Context, dir string) (*TerraformSchema, error)
 }
 
-// DefaultHCLParser implements HCLParser
 type DefaultHCLParser struct{}
 
-// NewHCLParser creates a new HCL parser
 func NewHCLParser() *DefaultHCLParser {
 	return &DefaultHCLParser{}
 }
 
-// ParseProviderRequirements parses provider requirements from a terraform.tf file
 func (p *DefaultHCLParser) ParseProviderRequirements(ctx context.Context, filename string) (map[string]ProviderConfig, error) {
 	parser := hclparse.NewParser()
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
@@ -72,7 +67,6 @@ func (p *DefaultHCLParser) ParseProviderRequirements(ctx context.Context, filena
 	return providers, nil
 }
 
-// ParseMainFile parses a main.tf file to extract resources and data sources
 func (p *DefaultHCLParser) ParseMainFile(ctx context.Context, filename string) ([]ParsedResource, []ParsedDataSource, error) {
 	parser := hclparse.NewParser()
 	f, diags := parser.ParseHCLFile(filename)
@@ -122,7 +116,6 @@ func (p *DefaultHCLParser) ParseMainFile(ctx context.Context, filename string) (
 	return resources, dataSources, nil
 }
 
-// ParseSyntaxBody parses a hclsyntax.Body into a ParsedBlock
 func ParseSyntaxBody(body *hclsyntax.Body) *ParsedBlock {
 	bd := NewBlockData()
 	blk := &ParsedBlock{Data: bd}
@@ -131,70 +124,6 @@ func ParseSyntaxBody(body *hclsyntax.Body) *ParsedBlock {
 	return blk
 }
 
-// ParseSyntaxAttributes extracts attributes from a hclsyntax.Body
-func (bd *BlockData) ParseSyntaxAttributes(body *hclsyntax.Body) {
-	for name := range body.Attributes {
-		bd.Properties[name] = true
-	}
-}
-
-// ParseSyntaxBlocks processes all blocks in a hclsyntax.Body
-func (bd *BlockData) ParseSyntaxBlocks(body *hclsyntax.Body) {
-	directIgnoreChanges := extractLifecycleIgnoreChangesFromAST(body)
-	if len(directIgnoreChanges) > 0 {
-		bd.IgnoreChanges = append(bd.IgnoreChanges, directIgnoreChanges...)
-	}
-
-	for _, block := range body.Blocks {
-		switch block.Type {
-		case "lifecycle":
-			bd.parseLifecycleFromAST(block.Body)
-		case "dynamic":
-			if len(block.Labels) == 1 {
-				bd.parseDynamicBlockFromAST(block.Body, block.Labels[0])
-			}
-		default:
-			parsed := ParseSyntaxBody(block.Body)
-			bd.StaticBlocks[block.Type] = parsed
-		}
-	}
-}
-
-// parseLifecycleFromAST extracts ignore_changes from a lifecycle block
-func (bd *BlockData) parseLifecycleFromAST(body *hclsyntax.Body) {
-	for name, attr := range body.Attributes {
-		if name == "ignore_changes" {
-			val, diags := attr.Expr.Value(nil)
-			if diags == nil || !diags.HasErrors() {
-				extracted := extractIgnoreChanges(val)
-				bd.IgnoreChanges = append(bd.IgnoreChanges, extracted...)
-			}
-		}
-	}
-}
-
-// parseDynamicBlockFromAST processes a dynamic block
-func (bd *BlockData) parseDynamicBlockFromAST(body *hclsyntax.Body, name string) {
-	contentBlock := findContentBlockFromAST(body)
-	parsed := ParseSyntaxBody(contentBlock)
-	if existing := bd.DynamicBlocks[name]; existing != nil {
-		mergeBlocks(existing, parsed)
-	} else {
-		bd.DynamicBlocks[name] = parsed
-	}
-}
-
-// findContentBlockFromAST finds the content block within a dynamic block
-func findContentBlockFromAST(body *hclsyntax.Body) *hclsyntax.Body {
-	for _, b := range body.Blocks {
-		if b.Type == "content" {
-			return b.Body
-		}
-	}
-	return body
-}
-
-// extractIgnoreChanges extracts ignore_changes values from a cty.Value
 func extractIgnoreChanges(val cty.Value) []string {
 	var changes []string
 	if val.Type().IsCollectionType() {
@@ -212,7 +141,6 @@ func extractIgnoreChanges(val cty.Value) []string {
 	return changes
 }
 
-// extractLifecycleIgnoreChangesFromAST extracts ignore_changes from AST
 func extractLifecycleIgnoreChangesFromAST(body *hclsyntax.Body) []string {
 	var ignoreChanges []string
 
@@ -248,7 +176,6 @@ func extractLifecycleIgnoreChangesFromAST(body *hclsyntax.Body) []string {
 	return ignoreChanges
 }
 
-// NormalizeSource normalizes a provider source
 func NormalizeSource(source string) string {
 	if strings.Contains(source, "/") && !strings.Contains(source, "registry.terraform.io/") {
 		return "registry.terraform.io/" + source
@@ -256,7 +183,6 @@ func NormalizeSource(source string) string {
 	return source
 }
 
-// FindSubmodules finds submodules in a directory
 func FindSubmodules(modulesDir string) ([]SubModule, error) {
 	var result []SubModule
 

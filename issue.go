@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-// GitHubIssueManager implements IssueManager for GitHub
 type GitHubIssueManager struct {
 	RepoOwner string
 	RepoName  string
@@ -19,7 +18,6 @@ type GitHubIssueManager struct {
 	Client    *http.Client
 }
 
-// NewGitHubIssueManager creates a new GitHub issue manager
 func NewGitHubIssueManager(repoOwner, repoName, token string) *GitHubIssueManager {
 	return &GitHubIssueManager{
 		RepoOwner: repoOwner,
@@ -29,7 +27,6 @@ func NewGitHubIssueManager(repoOwner, repoName, token string) *GitHubIssueManage
 	}
 }
 
-// CreateOrUpdateIssue creates or updates a GitHub issue with validation findings
 func (g *GitHubIssueManager) CreateOrUpdateIssue(ctx context.Context, findings []ValidationFinding) error {
 	if len(findings) == 0 {
 		return nil
@@ -50,7 +47,6 @@ func (g *GitHubIssueManager) CreateOrUpdateIssue(ctx context.Context, findings [
 	}
 
 	var newBody bytes.Buffer
-	fmt.Fprint(&newBody)
 
 	for _, f := range dedup {
 		cleanPath := strings.ReplaceAll(f.Path, "root.", "")
@@ -96,7 +92,7 @@ func (g *GitHubIssueManager) CreateOrUpdateIssue(ctx context.Context, findings [
 	return g.createIssue(ctx, title, finalBody)
 }
 
-// CloseExistingIssuesIfEmpty finds and closes existing validation issues when there are no findings
+// CloseExistingIssuesIfEmpty closes validation issues when no findings exist
 func (g *GitHubIssueManager) CloseExistingIssuesIfEmpty(ctx context.Context) error {
 	// Search for existing schema validation issues that are open
 	title := "Generated schema validation"
@@ -114,7 +110,6 @@ func (g *GitHubIssueManager) CloseExistingIssuesIfEmpty(ctx context.Context) err
 	return g.closeIssue(ctx, issueNum, "All schema validation issues have been resolved. Closing this issue automatically.")
 }
 
-// findExistingIssue finds an existing GitHub issue with the given title
 func (g *GitHubIssueManager) findExistingIssue(ctx context.Context, title string) (int, string, error) {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?state=open", g.RepoOwner, g.RepoName)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
@@ -155,7 +150,6 @@ func (g *GitHubIssueManager) findExistingIssue(ctx context.Context, title string
 	return 0, "", nil
 }
 
-// updateIssue updates an existing GitHub issue
 func (g *GitHubIssueManager) updateIssue(ctx context.Context, issueNumber int, body string) error {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d", g.RepoOwner, g.RepoName, issueNumber)
 	payload := struct {
@@ -189,7 +183,6 @@ func (g *GitHubIssueManager) updateIssue(ctx context.Context, issueNumber int, b
 	return nil
 }
 
-// createIssue creates a new GitHub issue
 func (g *GitHubIssueManager) createIssue(ctx context.Context, title, body string) error {
 	payload := struct {
 		Title string `json:"title"`
@@ -227,7 +220,6 @@ func (g *GitHubIssueManager) createIssue(ctx context.Context, title, body string
 	return nil
 }
 
-// closeIssue closes an existing GitHub issue with a comment
 func (g *GitHubIssueManager) closeIssue(ctx context.Context, issueNumber int, comment string) error {
 	// First add a comment explaining why we're closing the issue
 	if comment != "" {
@@ -269,7 +261,6 @@ func (g *GitHubIssueManager) closeIssue(ctx context.Context, issueNumber int, co
 	return nil
 }
 
-// addComment adds a comment to an existing GitHub issue
 func (g *GitHubIssueManager) addComment(ctx context.Context, issueNumber int, comment string) error {
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d/comments", g.RepoOwner, g.RepoName, issueNumber)
 	payload := struct {

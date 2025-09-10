@@ -1,3 +1,4 @@
+// Package diffy validates Terraform configurations against provider schemas.
 package diffy
 
 import (
@@ -5,47 +6,55 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-// SimpleLogger is a basic implementation of the Logger interface
+// SimpleLogger implements Logger interface.
 type SimpleLogger struct{}
 
-// Logf implements the Logger interface
 func (l *SimpleLogger) Logf(format string, args ...any) {
 	fmt.Printf(format+"\n", args...)
 }
 
-// SchemaValidatorOptions contains options for schema validation
 type SchemaValidatorOptions struct {
-	TerraformRoot     string
-	CreateGitHubIssue bool
-	Logger            Logger
-	GitHubToken       string
-	GitHubOwner       string
-	GitHubRepo        string
-	Silent            bool
+	TerraformRoot       string
+	CreateGitHubIssue   bool
+	Logger              Logger
+	GitHubToken         string
+	GitHubOwner         string
+	GitHubRepo          string
+	Silent              bool
+	ExcludedResources   []string
+	ExcludedDataSources []string
 }
 
-// SchemaValidatorOption is a function that configures SchemaValidatorOptions
 type SchemaValidatorOption func(*SchemaValidatorOptions)
 
-// WithTerraformRoot sets the root directory for Terraform files
 func WithTerraformRoot(path string) SchemaValidatorOption {
 	return func(opts *SchemaValidatorOptions) {
 		opts.TerraformRoot = path
 	}
 }
 
-// WithGitHubIssueCreation enables GitHub issue creation with token
 func WithGitHubIssueCreation() SchemaValidatorOption {
 	return func(opts *SchemaValidatorOptions) {
 		opts.CreateGitHubIssue = true
 		opts.GitHubToken = os.Getenv("GITHUB_TOKEN")
-		// Let the GetRepoInfo method handle owner/repo if not specified
 	}
 }
 
-// ValidateSchema validates Terraform schema with the specified options
+func WithExcludedResources(resources ...string) SchemaValidatorOption {
+	return func(opts *SchemaValidatorOptions) {
+		opts.ExcludedResources = append(opts.ExcludedResources, resources...)
+	}
+}
+
+func WithExcludedDataSources(dataSources ...string) SchemaValidatorOption {
+	return func(opts *SchemaValidatorOptions) {
+		opts.ExcludedDataSources = append(opts.ExcludedDataSources, dataSources...)
+	}
+}
+
 func ValidateSchema(options ...SchemaValidatorOption) ([]ValidationFinding, error) {
 	// Initialize with minimal defaults
 	opts := &SchemaValidatorOptions{
@@ -62,6 +71,23 @@ func ValidateSchema(options ...SchemaValidatorOption) ([]ValidationFinding, erro
 	// Check for TERRAFORM_ROOT environment variable (highest priority)
 	if envRoot := os.Getenv("TERRAFORM_ROOT"); envRoot != "" {
 		opts.TerraformRoot = envRoot
+	}
+
+	// Check for exclusion environment variables
+	if envExcludedResources := os.Getenv("EXCLUDED_RESOURCES"); envExcludedResources != "" {
+		resources := strings.Split(envExcludedResources, ",")
+		for i, r := range resources {
+			resources[i] = strings.TrimSpace(r)
+		}
+		opts.ExcludedResources = append(opts.ExcludedResources, resources...)
+	}
+
+	if envExcludedDataSources := os.Getenv("EXCLUDED_DATA_SOURCES"); envExcludedDataSources != "" {
+		dataSources := strings.Split(envExcludedDataSources, ",")
+		for i, ds := range dataSources {
+			dataSources[i] = strings.TrimSpace(ds)
+		}
+		opts.ExcludedDataSources = append(opts.ExcludedDataSources, dataSources...)
 	}
 
 	// Validate TerraformRoot is set
@@ -91,7 +117,6 @@ func ValidateSchema(options ...SchemaValidatorOption) ([]ValidationFinding, erro
 	return findings, nil
 }
 
-// validateProject is the internal implementation of project validation
 func validateProject(opts *SchemaValidatorOptions) ([]ValidationFinding, error) {
 	// Resolve absolute path
 	absRoot, err := filepath.Abs(opts.TerraformRoot)
@@ -100,7 +125,7 @@ func validateProject(opts *SchemaValidatorOptions) ([]ValidationFinding, error) 
 	}
 
 	// Run validation on root directory
-	rootFindings, err := ValidateTerraformSchemaInDirectory(opts.Logger, absRoot, "")
+	rootFindings, err := ValidateTerraformSchemaInDirectoryWithOptions(opts.Logger, absRoot, "", opts.ExcludedResources, opts.ExcludedDataSources)
 	if err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
@@ -118,7 +143,7 @@ func validateProject(opts *SchemaValidatorOptions) ([]ValidationFinding, error) 
 		}
 	} else {
 		for _, sm := range submodules {
-			findings, err := ValidateTerraformSchemaInDirectory(opts.Logger, sm.Path, sm.Name)
+			findings, err := ValidateTerraformSchemaInDirectoryWithOptions(opts.Logger, sm.Path, sm.Name, opts.ExcludedResources, opts.ExcludedDataSources)
 			if err != nil {
 				opts.Logger.Logf("Failed to validate submodule %s: %v", sm.Name, err)
 				continue
@@ -133,7 +158,6 @@ func validateProject(opts *SchemaValidatorOptions) ([]ValidationFinding, error) 
 	return deduplicatedFindings, nil
 }
 
-// outputFindings prints validation findings to stdout
 func outputFindings(findings []ValidationFinding) {
 	if len(findings) == 0 {
 		fmt.Println("No validation findings.")
@@ -147,7 +171,6 @@ func outputFindings(findings []ValidationFinding) {
 	}
 }
 
-// createGitHubIssue creates a GitHub issue with validation findings
 func createGitHubIssue(ctx context.Context, opts *SchemaValidatorOptions, findings []ValidationFinding) error {
 	// Get GitHub token
 	if opts.GitHubToken == "" {
