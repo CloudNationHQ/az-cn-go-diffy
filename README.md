@@ -1,10 +1,13 @@
 # diffy [![Go Reference](https://pkg.go.dev/badge/github.com/cloudnationhq/az-cn-go-diffy.svg)](https://pkg.go.dev/github.com/cloudnationhq/az-cn-go-diffy)
 
-A terraform schema validation tool that ensures your infrastructure configurations are complete and compliant with provider specifications. Automatically detects missing required properties, validates optional attributes, and helps maintain configuration quality across teams and projects.
+A terraform schema validation tool that ensures your infrastructure configurations are complete and compliant with provider specifications.
+
+Automatically detects missing required properties, validates optional attributes, and helps maintain configuration quality across teams and projects.
 
 ## Why diffy?
 
 Terraform configurations can become complex and inconsistent over time. Missing required properties, outdated attribute names, and incomplete resource definitions can lead to deployment failures and configuration drift.
+
 Diffy helps you:
 
 Catch configuration errors before deployment
