@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/CloudNationHQ/az-cn-go-diffy/compare/v1.2.0...v1.3.0) (2025-09-12)
+
+
+### Features
+
+* refactor existing codebase and updated documentation ([#16](https://github.com/CloudNationHQ/az-cn-go-diffy/issues/16)) ([ae9f36e](https://github.com/CloudNationHQ/az-cn-go-diffy/commit/ae9f36e1ccb20cdb17477cc57a53e0229541dccd))
+
 ## [1.2.0](https://github.com/CloudNationHQ/az-cn-go-diffy/compare/v1.1.1...v1.2.0) (2025-09-10)
 
 
