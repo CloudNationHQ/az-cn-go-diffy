@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclparse"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
@@ -28,19 +29,55 @@ func NewHCLParser() *DefaultHCLParser {
 	return &DefaultHCLParser{}
 }
 
-func (p *DefaultHCLParser) ParseProviderRequirements(ctx context.Context, filename string) (map[string]ProviderConfig, error) {
-	parser := hclparse.NewParser()
-	if _, err := os.Stat(filename); os.IsNotExist(err) {
-		return map[string]ProviderConfig{}, nil
+func (parser *DefaultHCLParser) ParseProviderRequirements(ctx context.Context, filename string) (map[string]ProviderConfig, error) {
+	f, err := parser.parseHCLFile(filename)
+	if err != nil {
+		return nil, err
 	}
-	f, diags := parser.ParseHCLFile(filename)
-	if diags.HasErrors() {
-		return nil, fmt.Errorf("parse error in file %s: %v", filename, diags)
-	}
+
 	body, ok := f.Body.(*hclsyntax.Body)
 	if !ok {
-		return nil, fmt.Errorf("invalid body in file %s", filename)
+		return nil, &ParseError{
+			File:    filename,
+			Message: "invalid HCL body type",
+		}
 	}
+
+	return parser.parseProviderRequirementsFromBody(body)
+}
+
+func (parser *DefaultHCLParser) ParseMainFile(ctx context.Context, filename string) ([]ParsedResource, []ParsedDataSource, error) {
+	f, err := parser.parseHCLFile(filename)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	body, ok := f.Body.(*hclsyntax.Body)
+	if !ok {
+		return nil, nil, &ParseError{
+			File:    filename,
+			Message: "invalid HCL body type",
+		}
+	}
+
+	return parser.parseMainFileFromBody(body)
+}
+
+// parseHCLFile is a helper function that handles common HCL file parsing with error handling
+func (parser *DefaultHCLParser) parseHCLFile(filename string) (*hcl.File, error) {
+	hclParser := hclparse.NewParser()
+	f, diags := hclParser.ParseHCLFile(filename)
+	if diags.HasErrors() {
+		return nil, &ParseError{
+			File:    filename,
+			Message: "failed to parse HCL file",
+			Err:     fmt.Errorf("%v", diags),
+		}
+	}
+	return f, nil
+}
+
+func (parser *DefaultHCLParser) parseProviderRequirementsFromBody(body *hclsyntax.Body) (map[string]ProviderConfig, error) {
 	providers := make(map[string]ProviderConfig)
 	for _, blk := range body.Blocks {
 		if blk.Type == "terraform" {
@@ -67,16 +104,7 @@ func (p *DefaultHCLParser) ParseProviderRequirements(ctx context.Context, filena
 	return providers, nil
 }
 
-func (p *DefaultHCLParser) ParseMainFile(ctx context.Context, filename string) ([]ParsedResource, []ParsedDataSource, error) {
-	parser := hclparse.NewParser()
-	f, diags := parser.ParseHCLFile(filename)
-	if diags.HasErrors() {
-		return nil, nil, fmt.Errorf("parse error in file %s: %v", filename, diags)
-	}
-	body, ok := f.Body.(*hclsyntax.Body)
-	if !ok {
-		return nil, nil, fmt.Errorf("invalid body in file %s", filename)
-	}
+func (parser *DefaultHCLParser) parseMainFileFromBody(body *hclsyntax.Body) ([]ParsedResource, []ParsedDataSource, error) {
 	var resources []ParsedResource
 	var dataSources []ParsedDataSource
 
@@ -124,17 +152,17 @@ func ParseSyntaxBody(body *hclsyntax.Body) *ParsedBlock {
 	return blk
 }
 
-func extractIgnoreChanges(val cty.Value) []string {
+func extractIgnoreChangesFromValue(val cty.Value) []string {
 	var changes []string
 	if val.Type().IsCollectionType() {
 		for it := val.ElementIterator(); it.Next(); {
-			_, v := it.Element()
-			if v.Type() == cty.String {
-				str := v.AsString()
-				if str == "all" {
+			_, element := it.Element()
+			if element.Type() == cty.String {
+				change := element.AsString()
+				if change == "all" {
 					return []string{"*all*"}
 				}
-				changes = append(changes, str)
+				changes = append(changes, change)
 			}
 		}
 	}
@@ -146,9 +174,9 @@ func extractLifecycleIgnoreChangesFromAST(body *hclsyntax.Body) []string {
 
 	for _, block := range body.Blocks {
 		if block.Type == "lifecycle" {
-			for name, attr := range block.Body.Attributes {
+			for name, attribute := range block.Body.Attributes {
 				if name == "ignore_changes" {
-					if listExpr, ok := attr.Expr.(*hclsyntax.TupleConsExpr); ok {
+					if listExpr, ok := attribute.Expr.(*hclsyntax.TupleConsExpr); ok {
 						for _, expr := range listExpr.Exprs {
 							switch exprType := expr.(type) {
 							case *hclsyntax.ScopeTraversalExpr:

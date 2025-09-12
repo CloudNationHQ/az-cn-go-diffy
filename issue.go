@@ -11,73 +11,79 @@ import (
 	"time"
 )
 
-type GitHubIssueManager struct {
+type GitHubConfig struct {
 	RepoOwner string
 	RepoName  string
 	Token     string
-	Client    *http.Client
+}
+
+type GitHubIssueManager struct {
+	GitHubConfig
+	Client *http.Client
 }
 
 func NewGitHubIssueManager(repoOwner, repoName, token string) *GitHubIssueManager {
 	return &GitHubIssueManager{
-		RepoOwner: repoOwner,
-		RepoName:  repoName,
-		Token:     token,
-		Client:    &http.Client{Timeout: 10 * time.Second},
+		GitHubConfig: GitHubConfig{
+			RepoOwner: repoOwner,
+			RepoName:  repoName,
+			Token:     token,
+		},
+		Client: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-func (g *GitHubIssueManager) CreateOrUpdateIssue(ctx context.Context, findings []ValidationFinding) error {
+func (manager *GitHubIssueManager) CreateOrUpdateIssue(ctx context.Context, findings []ValidationFinding) error {
 	if len(findings) == 0 {
 		return nil
 	}
 
 	dedup := make(map[string]ValidationFinding)
 
-	for _, f := range findings {
+	for _, finding := range findings {
 		key := fmt.Sprintf("%s|%s|%s|%v|%v|%s",
-			f.ResourceType,
-			strings.ReplaceAll(f.Path, "root.", ""),
-			f.Name,
-			f.IsBlock,
-			f.IsDataSource,
-			f.SubmoduleName,
+			finding.ResourceType,
+			strings.ReplaceAll(finding.Path, "root.", ""),
+			finding.Name,
+			finding.IsBlock,
+			finding.IsDataSource,
+			finding.SubmoduleName,
 		)
-		dedup[key] = f
+		dedup[key] = finding
 	}
 
 	var newBody bytes.Buffer
 
-	for _, f := range dedup {
-		cleanPath := strings.ReplaceAll(f.Path, "root.", "")
+	for _, finding := range dedup {
+		cleanPath := strings.ReplaceAll(finding.Path, "root.", "")
 		status := "optional"
-		if f.Required {
+		if finding.Required {
 			status = "required"
 		}
 
 		itemType := "property"
-		if f.IsBlock {
+		if finding.IsBlock {
 			itemType = "block"
 		}
 
 		entityType := "resource"
-		if f.IsDataSource {
+		if finding.IsDataSource {
 			entityType = "data source"
 		}
 
-		if f.SubmoduleName == "" {
+		if finding.SubmoduleName == "" {
 			fmt.Fprintf(&newBody, "`%s`: missing %s %s `%s` in `%s` (%s)\n\n",
-				f.ResourceType, status, itemType, f.Name, cleanPath, entityType,
+				finding.ResourceType, status, itemType, finding.Name, cleanPath, entityType,
 			)
 		} else {
 			fmt.Fprintf(&newBody, "`%s`: missing %s %s `%s` in `%s` in submodule `%s` (%s)\n\n",
-				f.ResourceType, status, itemType, f.Name, cleanPath, f.SubmoduleName, entityType,
+				finding.ResourceType, status, itemType, finding.Name, cleanPath, finding.SubmoduleName, entityType,
 			)
 		}
 	}
 
 	title := "Generated schema validation"
-	issueNum, _, err := g.findExistingIssue(ctx, title)
+	issueNum, _, err := manager.findExistingIssue(ctx, title)
 	if err != nil {
 		return err
 	}
@@ -85,18 +91,17 @@ func (g *GitHubIssueManager) CreateOrUpdateIssue(ctx context.Context, findings [
 	finalBody := newBody.String()
 	if issueNum > 0 {
 		// Update existing issue
-		return g.updateIssue(ctx, issueNum, finalBody)
+		return manager.updateIssue(ctx, issueNum, finalBody)
 	}
 
 	// Create new issue
-	return g.createIssue(ctx, title, finalBody)
+	return manager.createIssue(ctx, title, finalBody)
 }
 
-// CloseExistingIssuesIfEmpty closes validation issues when no findings exist
-func (g *GitHubIssueManager) CloseExistingIssuesIfEmpty(ctx context.Context) error {
+func (manager *GitHubIssueManager) CloseExistingIssuesIfEmpty(ctx context.Context) error {
 	// Search for existing schema validation issues that are open
 	title := "Generated schema validation"
-	issueNum, _, err := g.findExistingIssue(ctx, title)
+	issueNum, _, err := manager.findExistingIssue(ctx, title)
 	if err != nil {
 		return fmt.Errorf("error finding existing issues: %w", err)
 	}
@@ -107,28 +112,40 @@ func (g *GitHubIssueManager) CloseExistingIssuesIfEmpty(ctx context.Context) err
 	}
 
 	// Close the issue since there are no more findings
-	return g.closeIssue(ctx, issueNum, "All schema validation issues have been resolved. Closing this issue automatically.")
+	return manager.closeIssue(ctx, issueNum, "All schema validation issues have been resolved. Closing this issue automatically.")
 }
 
-func (g *GitHubIssueManager) findExistingIssue(ctx context.Context, title string) (int, string, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?state=open", g.RepoOwner, g.RepoName)
+func (manager *GitHubIssueManager) findExistingIssue(ctx context.Context, title string) (int, string, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?state=open", manager.RepoOwner, manager.RepoName)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return 0, "", fmt.Errorf("failed to create request: %w", err)
+		return 0, "", &GitHubError{
+			Operation: "find existing issue",
+			Message:   "failed to create request",
+			Err:       err,
+		}
 	}
 
-	req.Header.Set("Authorization", "token "+g.Token)
+	req.Header.Set("Authorization", "token "+manager.Token)
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
-	resp, err := g.Client.Do(req)
+	resp, err := manager.Client.Do(req)
 	if err != nil {
-		return 0, "", err
+		return 0, "", &GitHubError{
+			Operation: "find existing issue",
+			Message:   "request failed",
+			Err:       err,
+		}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return 0, "", fmt.Errorf("GitHub API error: %s, response: %s", resp.Status, string(body))
+		return 0, "", &GitHubError{
+			Operation: "find existing issue",
+			Message:   fmt.Sprintf("API error: %s", resp.Status),
+			Err:       fmt.Errorf("response: %s", string(body)),
+		}
 	}
 
 	var issues []struct {
@@ -138,7 +155,11 @@ func (g *GitHubIssueManager) findExistingIssue(ctx context.Context, title string
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&issues); err != nil {
-		return 0, "", err
+		return 0, "", &GitHubError{
+			Operation: "find existing issue",
+			Message:   "failed to decode response",
+			Err:       err,
+		}
 	}
 
 	for _, issue := range issues {
@@ -150,40 +171,56 @@ func (g *GitHubIssueManager) findExistingIssue(ctx context.Context, title string
 	return 0, "", nil
 }
 
-func (g *GitHubIssueManager) updateIssue(ctx context.Context, issueNumber int, body string) error {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d", g.RepoOwner, g.RepoName, issueNumber)
+func (manager *GitHubIssueManager) updateIssue(ctx context.Context, issueNumber int, body string) error {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d", manager.RepoOwner, manager.RepoName, issueNumber)
 	payload := struct {
 		Body string `json:"body"`
 	}{Body: body}
 
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %w", err)
+		return &GitHubError{
+			Operation: "update issue",
+			Message:   "failed to marshal payload",
+			Err:       err,
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return &GitHubError{
+			Operation: "update issue",
+			Message:   "failed to create request",
+			Err:       err,
+		}
 	}
 
-	req.Header.Set("Authorization", "token "+g.Token)
+	req.Header.Set("Authorization", "token "+manager.Token)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := g.Client.Do(req)
+	resp, err := manager.Client.Do(req)
 	if err != nil {
-		return err
+		return &GitHubError{
+			Operation: "update issue",
+			Message:   "request failed",
+			Err:       err,
+		}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GitHub API error: %s, response: %s", resp.Status, string(body))
+		return &GitHubError{
+			Operation: "update issue",
+			Message:   fmt.Sprintf("API error: %s", resp.Status),
+			Err:       fmt.Errorf("response: %s", string(body)),
+		}
 	}
 
 	return nil
 }
 
-func (g *GitHubIssueManager) createIssue(ctx context.Context, title, body string) error {
+func (manager *GitHubIssueManager) createIssue(ctx context.Context, title, body string) error {
 	payload := struct {
 		Title string `json:"title"`
 		Body  string `json:"body"`
@@ -194,101 +231,153 @@ func (g *GitHubIssueManager) createIssue(ctx context.Context, title, body string
 
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %w", err)
+		return &GitHubError{
+			Operation: "create issue",
+			Message:   "failed to marshal payload",
+			Err:       err,
+		}
 	}
 
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues", g.RepoOwner, g.RepoName)
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues", manager.RepoOwner, manager.RepoName)
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return &GitHubError{
+			Operation: "create issue",
+			Message:   "failed to create request",
+			Err:       err,
+		}
 	}
 
-	req.Header.Set("Authorization", "token "+g.Token)
+	req.Header.Set("Authorization", "token "+manager.Token)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := g.Client.Do(req)
+	resp, err := manager.Client.Do(req)
 	if err != nil {
-		return err
+		return &GitHubError{
+			Operation: "create issue",
+			Message:   "request failed",
+			Err:       err,
+		}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GitHub API error: %s, response: %s", resp.Status, string(body))
+		return &GitHubError{
+			Operation: "create issue",
+			Message:   fmt.Sprintf("API error: %s", resp.Status),
+			Err:       fmt.Errorf("response: %s", string(body)),
+		}
 	}
 
 	return nil
 }
 
-func (g *GitHubIssueManager) closeIssue(ctx context.Context, issueNumber int, comment string) error {
+func (manager *GitHubIssueManager) closeIssue(ctx context.Context, issueNumber int, comment string) error {
 	// First add a comment explaining why we're closing the issue
 	if comment != "" {
-		if err := g.addComment(ctx, issueNumber, comment); err != nil {
-			return fmt.Errorf("failed to add closing comment: %w", err)
+		if err := manager.addComment(ctx, issueNumber, comment); err != nil {
+			return &GitHubError{
+				Operation: "close issue",
+				Message:   "failed to add closing comment",
+				Err:       err,
+			}
 		}
 	}
 
 	// Then close the issue
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d", g.RepoOwner, g.RepoName, issueNumber)
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d", manager.RepoOwner, manager.RepoName, issueNumber)
 	payload := struct {
 		State string `json:"state"`
 	}{State: "closed"}
 
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %w", err)
+		return &GitHubError{
+			Operation: "close issue",
+			Message:   "failed to marshal payload",
+			Err:       err,
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "PATCH", url, bytes.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return &GitHubError{
+			Operation: "close issue",
+			Message:   "failed to create request",
+			Err:       err,
+		}
 	}
 
-	req.Header.Set("Authorization", "token "+g.Token)
+	req.Header.Set("Authorization", "token "+manager.Token)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := g.Client.Do(req)
+	resp, err := manager.Client.Do(req)
 	if err != nil {
-		return err
+		return &GitHubError{
+			Operation: "close issue",
+			Message:   "request failed",
+			Err:       err,
+		}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GitHub API error when closing issue: %s, response: %s", resp.Status, string(body))
+		return &GitHubError{
+			Operation: "close issue",
+			Message:   fmt.Sprintf("API error: %s", resp.Status),
+			Err:       fmt.Errorf("response: %s", string(body)),
+		}
 	}
 
 	return nil
 }
 
-func (g *GitHubIssueManager) addComment(ctx context.Context, issueNumber int, comment string) error {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d/comments", g.RepoOwner, g.RepoName, issueNumber)
+func (manager *GitHubIssueManager) addComment(ctx context.Context, issueNumber int, comment string) error {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d/comments", manager.RepoOwner, manager.RepoName, issueNumber)
 	payload := struct {
 		Body string `json:"body"`
 	}{Body: comment}
 
 	data, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %w", err)
+		return &GitHubError{
+			Operation: "add comment",
+			Message:   "failed to marshal payload",
+			Err:       err,
+		}
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(data))
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
+		return &GitHubError{
+			Operation: "add comment",
+			Message:   "failed to create request",
+			Err:       err,
+		}
 	}
 
-	req.Header.Set("Authorization", "token "+g.Token)
+	req.Header.Set("Authorization", "token "+manager.Token)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := g.Client.Do(req)
+	resp, err := manager.Client.Do(req)
 	if err != nil {
-		return err
+		return &GitHubError{
+			Operation: "add comment",
+			Message:   "request failed",
+			Err:       err,
+		}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("GitHub API error when adding comment: %s, response: %s", resp.Status, string(body))
+		return &GitHubError{
+			Operation: "add comment",
+			Message:   fmt.Sprintf("API error: %s", resp.Status),
+			Err:       fmt.Errorf("response: %s", string(body)),
+		}
 	}
 
 	return nil

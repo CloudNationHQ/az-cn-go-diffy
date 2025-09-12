@@ -9,52 +9,6 @@ import (
 	"strings"
 )
 
-// SimpleLogger implements Logger interface.
-type SimpleLogger struct{}
-
-func (l *SimpleLogger) Logf(format string, args ...any) {
-	fmt.Printf(format+"\n", args...)
-}
-
-type SchemaValidatorOptions struct {
-	TerraformRoot       string
-	CreateGitHubIssue   bool
-	Logger              Logger
-	GitHubToken         string
-	GitHubOwner         string
-	GitHubRepo          string
-	Silent              bool
-	ExcludedResources   []string
-	ExcludedDataSources []string
-}
-
-type SchemaValidatorOption func(*SchemaValidatorOptions)
-
-func WithTerraformRoot(path string) SchemaValidatorOption {
-	return func(opts *SchemaValidatorOptions) {
-		opts.TerraformRoot = path
-	}
-}
-
-func WithGitHubIssueCreation() SchemaValidatorOption {
-	return func(opts *SchemaValidatorOptions) {
-		opts.CreateGitHubIssue = true
-		opts.GitHubToken = os.Getenv("GITHUB_TOKEN")
-	}
-}
-
-func WithExcludedResources(resources ...string) SchemaValidatorOption {
-	return func(opts *SchemaValidatorOptions) {
-		opts.ExcludedResources = append(opts.ExcludedResources, resources...)
-	}
-}
-
-func WithExcludedDataSources(dataSources ...string) SchemaValidatorOption {
-	return func(opts *SchemaValidatorOptions) {
-		opts.ExcludedDataSources = append(opts.ExcludedDataSources, dataSources...)
-	}
-}
-
 func ValidateSchema(options ...SchemaValidatorOption) ([]ValidationFinding, error) {
 	// Initialize with minimal defaults
 	opts := &SchemaValidatorOptions{
@@ -166,8 +120,8 @@ func outputFindings(findings []ValidationFinding) {
 
 	fmt.Printf("Found %d issues:\n", len(findings))
 
-	for _, f := range findings {
-		fmt.Println(FormatFinding(f))
+	for _, finding := range findings {
+		fmt.Println(FormatFinding(finding))
 	}
 }
 

@@ -18,100 +18,110 @@ func NewSchemaValidator(logger Logger) *DefaultSchemaValidator {
 	}
 }
 
-func (v *DefaultSchemaValidator) ValidateResources(
+func (validator *DefaultSchemaValidator) ValidateResources(
 	resources []ParsedResource,
 	schema TerraformSchema,
 	providers map[string]ProviderConfig,
 	dir, submoduleName string,
 ) []ValidationFinding {
-	var findings []ValidationFinding
-
-	for _, r := range resources {
-		provName := strings.SplitN(r.Type, "_", 2)[0]
-		cfg, ok := providers[provName]
-		if !ok {
-			v.logger.Logf("No provider config for resource type %s in %s", r.Type, dir)
-			continue
-		}
-
-		pSchema, ok := schema.ProviderSchemas[cfg.Source]
-		if !ok {
-			v.logger.Logf("No provider schema found for source %s in %s", cfg.Source, dir)
-			continue
-		}
-
-		resSchema, ok := pSchema.ResourceSchemas[r.Type]
-		if !ok {
-			v.logger.Logf("No resource schema found for %s in provider %s (dir=%s)", r.Type, cfg.Source, dir)
-			continue
-		}
-
-		var local []ValidationFinding
-		r.Data.Validate(r.Type, "root", resSchema.Block, r.Data.IgnoreChanges, &local)
-
-		for i := range local {
-			shouldExclude := false
-			for _, ignored := range r.Data.IgnoreChanges {
-				if strings.EqualFold(ignored, local[i].Name) {
-					shouldExclude = true
-					break
-				}
-			}
-
-			if !shouldExclude {
-				local[i].SubmoduleName = submoduleName
-				findings = append(findings, local[i])
-			}
-		}
-	}
-
-	return findings
+	return validator.validateEntities(resources, schema, providers, dir, submoduleName, false)
 }
 
-func (v *DefaultSchemaValidator) ValidateDataSources(
+func (validator *DefaultSchemaValidator) ValidateDataSources(
 	dataSources []ParsedDataSource,
 	schema TerraformSchema,
 	providers map[string]ProviderConfig,
 	dir, submoduleName string,
 ) []ValidationFinding {
+	return validator.validateEntities(dataSources, schema, providers, dir, submoduleName, true)
+}
+
+// validateEntities is a generic function that handles validation for both resources and data sources
+func (validator *DefaultSchemaValidator) validateEntities(
+	entities any,
+	schema TerraformSchema,
+	providers map[string]ProviderConfig,
+	dir, submoduleName string,
+	isDataSource bool,
+) []ValidationFinding {
 	var findings []ValidationFinding
 
-	for _, ds := range dataSources {
-		provName := strings.SplitN(ds.Type, "_", 2)[0]
+	// Type assertion to handle both []ParsedResource and []ParsedDataSource
+	var entityList []struct {
+		Type string
+		Name string
+		Data BlockData
+	}
+
+	switch e := entities.(type) {
+	case []ParsedResource:
+		for _, r := range e {
+			entityList = append(entityList, struct {
+				Type string
+				Name string
+				Data BlockData
+			}{r.Type, r.Name, r.Data})
+		}
+	case []ParsedDataSource:
+		for _, ds := range e {
+			entityList = append(entityList, struct {
+				Type string
+				Name string
+				Data BlockData
+			}{ds.Type, ds.Name, ds.Data})
+		}
+	default:
+		return findings
+	}
+
+	for _, entity := range entityList {
+		provName := strings.SplitN(entity.Type, "_", 2)[0]
 		cfg, ok := providers[provName]
 		if !ok {
-			v.logger.Logf("No provider config for data source type %s in %s", ds.Type, dir)
+			validator.logger.Logf("No provider config for %s type %s in %s",
+				map[bool]string{true: "data source", false: "resource"}[isDataSource],
+				entity.Type, dir)
 			continue
 		}
 
 		pSchema, ok := schema.ProviderSchemas[cfg.Source]
 		if !ok {
-			v.logger.Logf("No provider schema found for source %s in %s", cfg.Source, dir)
+			validator.logger.Logf("No provider schema found for source %s in %s", cfg.Source, dir)
 			continue
 		}
 
-		dsSchema, ok := pSchema.DataSourceSchemas[ds.Type]
-		if !ok {
-			v.logger.Logf("No data source schema found for %s in provider %s (dir=%s)", ds.Type, cfg.Source, dir)
+		// Get the appropriate schema based on entity type
+		var resSchema *ResourceSchema
+		var schemaExists bool
+		if isDataSource {
+			resSchema, schemaExists = pSchema.DataSourceSchemas[entity.Type]
+		} else {
+			resSchema, schemaExists = pSchema.ResourceSchemas[entity.Type]
+		}
+
+		if !schemaExists {
+			entityType := map[bool]string{true: "data source", false: "resource"}[isDataSource]
+			validator.logger.Logf("No %s schema found for %s in provider %s (dir=%s)",
+				entityType, entity.Type, cfg.Source, dir)
 			continue
 		}
 
-		var local []ValidationFinding
-		ds.Data.Validate(ds.Type, "root", dsSchema.Block, ds.Data.IgnoreChanges, &local)
+		var localFindings []ValidationFinding
+		entity.Data.Validate(entity.Type, "root", resSchema.Block, entity.Data.IgnoreChanges, &localFindings)
 
-		for i := range local {
+		for i := range localFindings {
 			shouldExclude := false
-			for _, ignored := range ds.Data.IgnoreChanges {
-				if strings.EqualFold(ignored, local[i].Name) {
+			for _, ignored := range entity.Data.IgnoreChanges {
+				if strings.EqualFold(ignored, localFindings[i].Name) {
 					shouldExclude = true
 					break
 				}
 			}
 
 			if !shouldExclude {
-				local[i].SubmoduleName = submoduleName
-				local[i].IsDataSource = true
-				findings = append(findings, local[i])
+				localFindings[i].SubmoduleName = submoduleName
+				localFindings[i].IsDataSource = isDataSource
+				findings = append(findings, localFindings[i])
 			}
 		}
 	}
@@ -162,11 +172,11 @@ func filterResources(resources []ParsedResource, excluded []string) []ParsedReso
 	if len(excluded) == 0 {
 		return resources
 	}
-	
+
 	var filtered []ParsedResource
-	for _, r := range resources {
-		if !slices.Contains(excluded, r.Type) {
-			filtered = append(filtered, r)
+	for _, resource := range resources {
+		if !slices.Contains(excluded, resource.Type) {
+			filtered = append(filtered, resource)
 		}
 	}
 	return filtered
@@ -176,11 +186,11 @@ func filterDataSources(dataSources []ParsedDataSource, excluded []string) []Pars
 	if len(excluded) == 0 {
 		return dataSources
 	}
-	
+
 	var filtered []ParsedDataSource
-	for _, ds := range dataSources {
-		if !slices.Contains(excluded, ds.Type) {
-			filtered = append(filtered, ds)
+	for _, dataSource := range dataSources {
+		if !slices.Contains(excluded, dataSource.Type) {
+			filtered = append(filtered, dataSource)
 		}
 	}
 	return filtered
@@ -190,52 +200,52 @@ func DeduplicateFindings(findings []ValidationFinding) []ValidationFinding {
 	seen := make(map[string]struct{})
 	result := make([]ValidationFinding, 0, len(findings))
 
-	for _, f := range findings {
+	for _, finding := range findings {
 		key := fmt.Sprintf("%s|%s|%s|%v|%v|%s",
-			f.ResourceType,
-			f.Path,
-			f.Name,
-			f.IsBlock,
-			f.IsDataSource,
-			f.SubmoduleName,
+			finding.ResourceType,
+			finding.Path,
+			finding.Name,
+			finding.IsBlock,
+			finding.IsDataSource,
+			finding.SubmoduleName,
 		)
 
 		if _, exists := seen[key]; !exists {
 			seen[key] = struct{}{}
-			result = append(result, f)
+			result = append(result, finding)
 		}
 	}
 
 	return result
 }
 
-func FormatFinding(f ValidationFinding) string {
-	cleanPath := strings.ReplaceAll(f.Path, "root.", "")
+func FormatFinding(finding ValidationFinding) string {
+	cleanPath := strings.ReplaceAll(finding.Path, "root.", "")
 
 	if cleanPath == "root" {
 		cleanPath = "root"
 	}
 
 	requiredOptional := "optional"
-	if f.Required {
+	if finding.Required {
 		requiredOptional = "required"
 	}
 
 	blockOrProp := "property"
-	if f.IsBlock {
+	if finding.IsBlock {
 		blockOrProp = "block"
 	}
 
 	entityType := "resource"
-	if f.IsDataSource {
+	if finding.IsDataSource {
 		entityType = "data source"
 	}
 
 	place := cleanPath
-	if f.SubmoduleName != "" {
-		place = place + " in submodule " + f.SubmoduleName
+	if finding.SubmoduleName != "" {
+		place = place + " in submodule " + finding.SubmoduleName
 	}
 
 	return fmt.Sprintf("%s: missing %s %s %s in %s (%s)",
-		f.ResourceType, requiredOptional, blockOrProp, f.Name, place, entityType)
+		finding.ResourceType, requiredOptional, blockOrProp, finding.Name, place, entityType)
 }
