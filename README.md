@@ -19,9 +19,7 @@ Support automated validation in CI/CD pipelines
 
 ## Installation
 
-```bash
-go get github.com/cloudnationhq/az-cn-go-diffy
-```
+`go get github.com/cloudnationhq/az-cn-go-diffy`
 
 ## Usage
 
