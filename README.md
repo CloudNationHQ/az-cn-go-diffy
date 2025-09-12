@@ -4,7 +4,8 @@ A comprehensive Terraform schema validation tool that ensures your infrastructur
 
 ## Why diffy?
 
-Terraform configurations can become complex and inconsistent over time. Missing required properties, outdated attribute names, and incomplete resource definitions can lead to deployment failures and configuration drift. diffy helps you:
+Terraform configurations can become complex and inconsistent over time. Missing required properties, outdated attribute names, and incomplete resource definitions can lead to deployment failures and configuration drift.
+Diffy helps you:
 
 Catch configuration errors before deployment
 
