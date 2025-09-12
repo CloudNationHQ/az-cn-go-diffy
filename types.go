@@ -1,26 +1,60 @@
+// Package diffy provides core types and data structures
 package diffy
 
 import (
-	"context"
+	"fmt"
 )
 
-type BlockProcessor interface {
-	ParseAttributes(body *Body)
-	ParseBlocks(body *Body)
-	Validate(resourceType, path string, schema *SchemaBlock, parentIgnore []string, findings *[]ValidationFinding)
+// ParseError represents an error that occurred during parsing
+type ParseError struct {
+	File    string
+	Message string
+	Err     error
 }
 
-type SchemaValidator interface {
-	ValidateResources(resources []ParsedResource, schema TerraformSchema, providers map[string]ProviderConfig, dir, submoduleName string) []ValidationFinding
-	ValidateDataSources(dataSources []ParsedDataSource, schema TerraformSchema, providers map[string]ProviderConfig, dir, submoduleName string) []ValidationFinding
+func (e *ParseError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("parse error in %s: %s: %v", e.File, e.Message, e.Err)
+	}
+	return fmt.Sprintf("parse error in %s: %s", e.File, e.Message)
 }
 
-type IssueManager interface {
-	CreateOrUpdateIssue(ctx context.Context, findings []ValidationFinding) error
+func (e *ParseError) Unwrap() error {
+	return e.Err
 }
 
-type Logger interface {
-	Logf(format string, args ...any)
+type ValidationError struct {
+	ResourceType string
+	Message      string
+	Err          error
+}
+
+func (e *ValidationError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("validation error for %s: %s: %v", e.ResourceType, e.Message, e.Err)
+	}
+	return fmt.Sprintf("validation error for %s: %s", e.ResourceType, e.Message)
+}
+
+func (e *ValidationError) Unwrap() error {
+	return e.Err
+}
+
+type GitHubError struct {
+	Operation string
+	Message   string
+	Err       error
+}
+
+func (e *GitHubError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("GitHub %s error: %s: %v", e.Operation, e.Message, e.Err)
+	}
+	return fmt.Sprintf("GitHub %s error: %s", e.Operation, e.Message)
+}
+
+func (e *GitHubError) Unwrap() error {
+	return e.Err
 }
 
 type TerraformSchema struct {

@@ -5,10 +5,6 @@ import (
 	"strings"
 )
 
-type RepositoryInfoProvider interface {
-	GetRepoInfo() (owner, name string)
-}
-
 type GitRepoInfo struct {
 	TerraformRoot string
 }
