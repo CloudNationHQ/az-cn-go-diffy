@@ -1,6 +1,6 @@
 # diffy [![Go Reference](https://pkg.go.dev/badge/github.com/cloudnationhq/az-cn-go-diffy.svg)](https://pkg.go.dev/github.com/cloudnationhq/az-cn-go-diffy)
 
-A comprehensive Terraform schema validation tool that ensures your infrastructure configurations are complete and compliant with provider specifications. Automatically detects missing required properties, validates optional attributes, and helps maintain configuration quality across teams and projects.
+A terraform schema validation tool that ensures your infrastructure configurations are complete and compliant with provider specifications. Automatically detects missing required properties, validates optional attributes, and helps maintain configuration quality across teams and projects.
 
 ## Why diffy?
 
@@ -27,7 +27,7 @@ See the [examples/usage](examples/usage/) directory for examples and test cases.
 
 ## Features
 
-### Schema Validation
+`Schema Validation`
 
 Validates all Terraform resources and data sources against their provider schemas
 
@@ -37,7 +37,7 @@ Detects deprecated or invalid attribute configurations
 
 Supports recursive validation of nested modules and submodules
 
-### GitHub Integration
+`GitHub Integration`
 
 Automatically creates GitHub issues for validation findings
 
@@ -45,7 +45,7 @@ Provides detailed, actionable feedback on configuration problems
 
 Enables team collaboration on infrastructure quality improvements
 
-### Flexible Configuration
+`Flexible Configuration`
 
 Supports resource and data source exclusions for custom validation rules
 
@@ -55,7 +55,7 @@ Configurable logging levels and output formats
 
 Middleware pattern for custom validation extensions
 
-### Advanced Terraform Support
+`Advanced Terraform Support`
 
 Respects Terraform lifecycle blocks and ignore_changes directives
 
@@ -65,7 +65,7 @@ Works with all major Terraform providers and custom providers
 
 ## Configuration
 
-### Environment Variables
+`Environment Variables`
 
 Configure diffy through environment variables for CI/CD pipelines:
 
@@ -77,7 +77,7 @@ Configure diffy through environment variables for CI/CD pipelines:
 
 `GITHUB_TOKEN`: Personal access token for GitHub issue creation (optional)
 
-### Notes
+## Notes
 
 The `TERRAFORM_ROOT` environment variable takes highest priority when set
 
