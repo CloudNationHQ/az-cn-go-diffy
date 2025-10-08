@@ -94,6 +94,9 @@ func (parser *DefaultHCLParser) parseProviderRequirementsFromBody(body *hclsynta
 							if versionVal := val.GetAttr("version"); !versionVal.IsNull() {
 								pc.Version = versionVal.AsString()
 							}
+							if pc.Source == "" {
+								pc.Source = NormalizeSource("hashicorp/" + name)
+							}
 							providers[name] = pc
 						}
 					}
