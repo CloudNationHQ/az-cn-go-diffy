@@ -5,7 +5,6 @@ import (
 	"fmt"
 )
 
-// ParseError represents an error that occurred during parsing
 type ParseError struct {
 	File    string
 	Message string
@@ -92,12 +91,12 @@ type SchemaBlockType struct {
 
 type ValidationFinding struct {
 	ResourceType  string
-	Path          string // e.g., "root" or "root.some_nested_block"
+	Path          string
 	Name          string
 	Required      bool
 	IsBlock       bool
-	IsDataSource  bool   // If true, this is a data source, not a resource
-	SubmoduleName string // empty => root, else submodule name
+	IsDataSource  bool
+	SubmoduleName string
 }
 
 type ProviderConfig struct {
@@ -128,7 +127,6 @@ type ParsedBlock struct {
 	Data BlockData
 }
 
-// Body represents a generic HCL body interface
 type Body struct {
 	Attributes map[string]any
 	Blocks     []*Block

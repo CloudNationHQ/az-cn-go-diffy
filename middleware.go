@@ -1,10 +1,8 @@
 // Package diffy provides middleware functionality for validation operations
 package diffy
 
-// ValidationMiddleware represents a middleware function for validation
 type ValidationMiddleware func([]ValidationFinding, error) ([]ValidationFinding, error)
 
-// LoggingMiddleware creates a middleware that logs validation results
 func LoggingMiddleware(logger Logger) ValidationMiddleware {
 	return func(findings []ValidationFinding, err error) ([]ValidationFinding, error) {
 		if err != nil {
@@ -22,7 +20,6 @@ func LoggingMiddleware(logger Logger) ValidationMiddleware {
 	}
 }
 
-// ApplyMiddleware applies a middleware to validation results
 func ApplyMiddleware(findings []ValidationFinding, err error, middleware ValidationMiddleware) ([]ValidationFinding, error) {
 	return middleware(findings, err)
 }
