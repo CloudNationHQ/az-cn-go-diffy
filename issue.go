@@ -90,28 +90,23 @@ func (manager *GitHubIssueManager) CreateOrUpdateIssue(ctx context.Context, find
 
 	finalBody := newBody.String()
 	if issueNum > 0 {
-		// Update existing issue
 		return manager.updateIssue(ctx, issueNum, finalBody)
 	}
 
-	// Create new issue
 	return manager.createIssue(ctx, title, finalBody)
 }
 
 func (manager *GitHubIssueManager) CloseExistingIssuesIfEmpty(ctx context.Context) error {
-	// Search for existing schema validation issues that are open
 	title := "Generated schema validation"
 	issueNum, _, err := manager.findExistingIssue(ctx, title)
 	if err != nil {
 		return fmt.Errorf("error finding existing issues: %w", err)
 	}
 
-	// If there's no existing issue, nothing to do
 	if issueNum <= 0 {
 		return nil
 	}
 
-	// Close the issue since there are no more findings
 	return manager.closeIssue(ctx, issueNum, "All schema validation issues have been resolved. Closing this issue automatically.")
 }
 
@@ -274,7 +269,6 @@ func (manager *GitHubIssueManager) createIssue(ctx context.Context, title, body 
 }
 
 func (manager *GitHubIssueManager) closeIssue(ctx context.Context, issueNumber int, comment string) error {
-	// First add a comment explaining why we're closing the issue
 	if comment != "" {
 		if err := manager.addComment(ctx, issueNumber, comment); err != nil {
 			return &GitHubError{
@@ -285,7 +279,6 @@ func (manager *GitHubIssueManager) closeIssue(ctx context.Context, issueNumber i
 		}
 	}
 
-	// Then close the issue
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues/%d", manager.RepoOwner, manager.RepoName, issueNumber)
 	payload := struct {
 		State string `json:"state"`
@@ -379,6 +372,5 @@ func (manager *GitHubIssueManager) addComment(ctx context.Context, issueNumber i
 			Err:       fmt.Errorf("response: %s", string(body)),
 		}
 	}
-
 	return nil
 }

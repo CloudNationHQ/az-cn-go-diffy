@@ -36,7 +36,6 @@ func (validator *DefaultSchemaValidator) ValidateDataSources(
 	return validator.validateEntities(dataSources, schema, providers, dir, submoduleName, true)
 }
 
-// validateEntities is a generic function that handles validation for both resources and data sources
 func (validator *DefaultSchemaValidator) validateEntities(
 	entities any,
 	schema TerraformSchema,
@@ -46,7 +45,6 @@ func (validator *DefaultSchemaValidator) validateEntities(
 ) []ValidationFinding {
 	var findings []ValidationFinding
 
-	// Type assertion to handle both []ParsedResource and []ParsedDataSource
 	var entityList []struct {
 		Type string
 		Name string
@@ -90,7 +88,6 @@ func (validator *DefaultSchemaValidator) validateEntities(
 			continue
 		}
 
-		// Get the appropriate schema based on entity type
 		var resSchema *ResourceSchema
 		var schemaExists bool
 		if isDataSource {

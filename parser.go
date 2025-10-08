@@ -63,7 +63,6 @@ func (parser *DefaultHCLParser) ParseMainFile(ctx context.Context, filename stri
 	return parser.parseMainFileFromBody(body)
 }
 
-// parseHCLFile is a helper function that handles common HCL file parsing with error handling
 func (parser *DefaultHCLParser) parseHCLFile(filename string) (*hcl.File, error) {
 	hclParser := hclparse.NewParser()
 	f, diags := hclParser.ParseHCLFile(filename)
@@ -88,11 +87,15 @@ func (parser *DefaultHCLParser) parseProviderRequirementsFromBody(body *hclsynta
 						val, _ := attr.Expr.Value(nil)
 						if val.Type().IsObjectType() {
 							pc := ProviderConfig{}
-							if sourceVal := val.GetAttr("source"); !sourceVal.IsNull() {
-								pc.Source = NormalizeSource(sourceVal.AsString())
+							if val.Type().HasAttribute("source") {
+								if sourceVal := val.GetAttr("source"); !sourceVal.IsNull() {
+									pc.Source = NormalizeSource(sourceVal.AsString())
+								}
 							}
-							if versionVal := val.GetAttr("version"); !versionVal.IsNull() {
-								pc.Version = versionVal.AsString()
+							if val.Type().HasAttribute("version") {
+								if versionVal := val.GetAttr("version"); !versionVal.IsNull() {
+									pc.Version = versionVal.AsString()
+								}
 							}
 							if pc.Source == "" {
 								pc.Source = NormalizeSource("hashicorp/" + name)
