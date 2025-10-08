@@ -158,10 +158,9 @@ func ValidateTerraformSchemaWithOptions(logger Logger, dir, submoduleName string
 		return nil, err
 	}
 
-	mainTf := filepath.Join(dir, "main.tf")
-	resources, dataSources, err := parser.ParseMainFile(ctx, mainTf)
+	resources, dataSources, err := parser.ParseTerraformFiles(ctx, terraformFiles)
 	if err != nil {
-		return nil, fmt.Errorf("parseMainFile in %s: %w", dir, err)
+		return nil, fmt.Errorf("failed to parse Terraform resources in %s: %w", dir, err)
 	}
 
 	resources = filterResources(resources, excludedResources)
