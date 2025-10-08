@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 )
 
 func ValidateSchema(options ...SchemaValidatorOption) ([]ValidationFinding, error) {
@@ -69,7 +71,18 @@ func validateProject(opts *SchemaValidatorOptions) ([]ValidationFinding, error) 
 		return nil, fmt.Errorf("failed to resolve absolute path for %s: %w", opts.TerraformRoot, err)
 	}
 
-	rootFindings, err := ValidateTerraformSchemaInDirectoryWithOptions(opts.Logger, absRoot, "", opts.ExcludedResources, opts.ExcludedDataSources)
+	parser := NewHCLParser()
+	runner := NewTerraformRunner()
+
+	rootFindings, err := ValidateTerraformSchemaWithOptions(
+		opts.Logger,
+		absRoot,
+		"",
+		parser,
+		runner,
+		opts.ExcludedResources,
+		opts.ExcludedDataSources,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
 	}
@@ -83,16 +96,55 @@ func validateProject(opts *SchemaValidatorOptions) ([]ValidationFinding, error) 
 		if !opts.Silent {
 			fmt.Printf("Note: No submodules found in %s\n", modulesDir)
 		}
-	} else {
+	} else if len(submodules) > 0 {
+		concurrency := max(runtime.NumCPU(), 1)
+
+		type moduleResult struct {
+			findings []ValidationFinding
+		}
+
+		results := make(chan moduleResult, len(submodules))
+		sem := make(chan struct{}, concurrency)
+		var wg sync.WaitGroup
+
+		for _, module := range submodules {
+			wg.Add(1)
+			go func(sm SubModule) {
+				defer wg.Done()
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				findings, err := ValidateTerraformSchemaWithOptions(
+					opts.Logger,
+					sm.Path,
+					sm.Name,
+					parser,
+					runner,
+					opts.ExcludedResources,
+					opts.ExcludedDataSources,
+				)
+				if err != nil {
+					opts.Logger.Logf("Failed to validate submodule %s: %v", sm.Name, err)
+					return
+				}
+
+				results <- moduleResult{findings: findings}
+			}(module)
+		}
+
+		wg.Wait()
+		close(results)
+
+		for res := range results {
+			allFindings = append(allFindings, res.findings...)
+		}
+
 		for _, sm := range submodules {
-			findings, err := ValidateTerraformSchemaInDirectoryWithOptions(opts.Logger, sm.Path, sm.Name, opts.ExcludedResources, opts.ExcludedDataSources)
-			if err != nil {
-				opts.Logger.Logf("Failed to validate submodule %s: %v", sm.Name, err)
-				continue
-			}
-			allFindings = append(allFindings, findings...)
+			cleanupTerraformArtifacts(sm.Path)
 		}
 	}
+
+	cleanupTerraformArtifacts(absRoot)
 
 	deduplicatedFindings := DeduplicateFindings(allFindings)
 
