@@ -23,11 +23,6 @@ func (blockData *BlockData) ParseAttributes(body *hclsyntax.Body) {
 }
 
 func (blockData *BlockData) ParseBlocks(body *hclsyntax.Body) {
-	directIgnoreChanges := extractLifecycleIgnoreChangesFromAST(body)
-	if len(directIgnoreChanges) > 0 {
-		blockData.IgnoreChanges = append(blockData.IgnoreChanges, directIgnoreChanges...)
-	}
-
 	for _, block := range body.Blocks {
 		switch block.Type {
 		case "lifecycle":
@@ -46,13 +41,21 @@ func (blockData *BlockData) ParseBlocks(body *hclsyntax.Body) {
 func (blockData *BlockData) parseLifecycle(body *hclsyntax.Body) {
 	for name, attribute := range body.Attributes {
 		if name == "ignore_changes" {
-			value, diags := attribute.Expr.Value(nil)
-			if diags == nil || !diags.HasErrors() {
-				extracted := extractIgnoreChangesFromValue(value)
-				blockData.IgnoreChanges = append(blockData.IgnoreChanges, extracted...)
-			}
+			extracted := extractIgnoreChanges(attribute)
+			blockData.IgnoreChanges = append(blockData.IgnoreChanges, extracted...)
 		}
 	}
+}
+
+func extractIgnoreChanges(attribute *hclsyntax.Attribute) []string {
+	value, diags := attribute.Expr.Value(nil)
+	if diags == nil || !diags.HasErrors() {
+		extracted := extractIgnoreChangesFromValue(value)
+		if len(extracted) > 0 {
+			return extracted
+		}
+	}
+	return extractIgnoreChangesFromExpr(attribute.Expr)
 }
 
 func (blockData *BlockData) parseDynamicBlock(body *hclsyntax.Body, name string) {
@@ -72,6 +75,30 @@ func findContentBlockInBody(body *hclsyntax.Body) *hclsyntax.Body {
 		}
 	}
 	return body
+}
+
+func extractIgnoreChangesFromExpr(expr hclsyntax.Expression) []string {
+	switch e := expr.(type) {
+	case *hclsyntax.TupleConsExpr:
+		var results []string
+		for _, item := range e.Exprs {
+			results = append(results, extractIgnoreChangesFromExpr(item)...)
+		}
+		return results
+	case *hclsyntax.ScopeTraversalExpr:
+		if len(e.Traversal) > 0 {
+			return []string{e.Traversal.RootName()}
+		}
+	case *hclsyntax.TemplateExpr:
+		if len(e.Parts) == 1 {
+			if lit, ok := e.Parts[0].(*hclsyntax.LiteralValueExpr); ok {
+				return extractIgnoreChangesFromExpr(lit)
+			}
+		}
+	case *hclsyntax.LiteralValueExpr:
+		return extractIgnoreChangesFromValue(e.Val)
+	}
+	return nil
 }
 
 func (blockData *BlockData) Validate(
