@@ -16,6 +16,7 @@ import (
 type HCLParser interface {
 	ParseProviderRequirements(ctx context.Context, filename string) (map[string]ProviderConfig, error)
 	ParseMainFile(ctx context.Context, filename string) ([]ParsedResource, []ParsedDataSource, error)
+	ParseTerraformFiles(ctx context.Context, filenames []string) ([]ParsedResource, []ParsedDataSource, error)
 }
 
 type TerraformRunner interface {
@@ -47,20 +48,37 @@ func (parser *DefaultHCLParser) ParseProviderRequirements(ctx context.Context, f
 }
 
 func (parser *DefaultHCLParser) ParseMainFile(ctx context.Context, filename string) ([]ParsedResource, []ParsedDataSource, error) {
-	f, err := parser.parseHCLFile(filename)
-	if err != nil {
-		return nil, nil, err
-	}
+	return parser.ParseTerraformFiles(ctx, []string{filename})
+}
 
-	body, ok := f.Body.(*hclsyntax.Body)
-	if !ok {
-		return nil, nil, &ParseError{
-			File:    filename,
-			Message: "invalid HCL body type",
+func (parser *DefaultHCLParser) ParseTerraformFiles(_ context.Context, files []string) ([]ParsedResource, []ParsedDataSource, error) {
+	var allResources []ParsedResource
+	var allDataSources []ParsedDataSource
+
+	for _, filename := range files {
+		f, err := parser.parseHCLFile(filename)
+		if err != nil {
+			return nil, nil, err
 		}
+
+		body, ok := f.Body.(*hclsyntax.Body)
+		if !ok {
+			return nil, nil, &ParseError{
+				File:    filename,
+				Message: "invalid HCL body type",
+			}
+		}
+
+		resources, dataSources, err := parser.parseMainFileFromBody(body)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		allResources = append(allResources, resources...)
+		allDataSources = append(allDataSources, dataSources...)
 	}
 
-	return parser.parseMainFileFromBody(body)
+	return allResources, allDataSources, nil
 }
 
 func (parser *DefaultHCLParser) parseHCLFile(filename string) (*hcl.File, error) {
