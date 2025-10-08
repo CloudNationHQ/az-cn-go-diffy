@@ -3,6 +3,8 @@ package diffy
 import (
 	"context"
 	"fmt"
+	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -133,10 +135,18 @@ func ValidateTerraformSchema(logger Logger, dir, submoduleName string, parser HC
 func ValidateTerraformSchemaWithOptions(logger Logger, dir, submoduleName string, parser HCLParser, runner TerraformRunner, excludedResources, excludedDataSources []string) ([]ValidationFinding, error) {
 	ctx := context.Background()
 
-	tfFile := filepath.Join(dir, "terraform.tf")
-	providers, err := parser.ParseProviderRequirements(ctx, tfFile)
+	terraformFiles, err := walkTerraformFiles(dir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse provider config in %s: %w", dir, err)
+		return nil, fmt.Errorf("failed to discover Terraform files in %s: %w", dir, err)
+	}
+
+	providers := make(map[string]ProviderConfig)
+	for _, tfFile := range terraformFiles {
+		parsedProviders, err := parser.ParseProviderRequirements(ctx, tfFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse provider config in %s: %w", tfFile, err)
+		}
+		maps.Copy(providers, parsedProviders)
 	}
 
 	if err := runner.Init(ctx, dir); err != nil {
@@ -191,6 +201,26 @@ func filterDataSources(dataSources []ParsedDataSource, excluded []string) []Pars
 		}
 	}
 	return filtered
+}
+
+func walkTerraformFiles(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	files := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(entry.Name(), ".tf") {
+			files = append(files, filepath.Join(dir, entry.Name()))
+		}
+	}
+
+	slices.Sort(files)
+	return files, nil
 }
 
 func DeduplicateFindings(findings []ValidationFinding) []ValidationFinding {
