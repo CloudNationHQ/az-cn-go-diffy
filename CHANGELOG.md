@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.1](https://github.com/CloudNationHQ/az-cn-go-diffy/compare/v1.3.0...v1.3.1) (2025-10-08)
+
+
+### Bug Fixes
+
+* cache terraform schema/init work and parallelize module checks ([#24](https://github.com/CloudNationHQ/az-cn-go-diffy/issues/24)) ([3879a24](https://github.com/CloudNationHQ/az-cn-go-diffy/commit/3879a2436d1c26a6dfa0f806df23815811e424d0))
+* centralize lifecycle ignore_changes extraction and use fresh block copies ([#23](https://github.com/CloudNationHQ/az-cn-go-diffy/issues/23)) ([ba9460b](https://github.com/CloudNationHQ/az-cn-go-diffy/commit/ba9460b0087948f448dcd9beed70243eccefec15))
+* fill missing provider source with terraform’s default address ([#18](https://github.com/CloudNationHQ/az-cn-go-diffy/issues/18)) ([830a36e](https://github.com/CloudNationHQ/az-cn-go-diffy/commit/830a36e55cd9f3270cfff0277dfd01ab55d43553))
+* ingest resources and data sources from every tf file in the directory ([#21](https://github.com/CloudNationHQ/az-cn-go-diffy/issues/21)) ([3765d64](https://github.com/CloudNationHQ/az-cn-go-diffy/commit/3765d64a9ad2e3cda5d54034afe0ac0cd15749a2))
+* scan all tf files for provider requirements instead of terraform.tf only ([#20](https://github.com/CloudNationHQ/az-cn-go-diffy/issues/20)) ([b0d4caf](https://github.com/CloudNationHQ/az-cn-go-diffy/commit/b0d4caf469af947b1e5af36e530b28cdde6397c5))
+* track multiple static blocks of the same type instead of overwriting ([#22](https://github.com/CloudNationHQ/az-cn-go-diffy/issues/22)) ([c04705f](https://github.com/CloudNationHQ/az-cn-go-diffy/commit/c04705f580db557a0b8f7e1eff1a2fe55ad40572))
+
 ## [1.3.0](https://github.com/CloudNationHQ/az-cn-go-diffy/compare/v1.2.0...v1.3.0) (2025-09-12)
 
 
