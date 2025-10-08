@@ -136,11 +136,6 @@ func (parser *DefaultHCLParser) parseMainFileFromBody(body *hclsyntax.Body) ([]P
 		if blk.Type == "resource" && len(blk.Labels) >= 2 {
 			parsed := ParseSyntaxBody(blk.Body)
 
-			ignoreChanges := extractLifecycleIgnoreChangesFromAST(blk.Body)
-			if len(ignoreChanges) > 0 {
-				parsed.Data.IgnoreChanges = append(parsed.Data.IgnoreChanges, ignoreChanges...)
-			}
-
 			res := ParsedResource{
 				Type: blk.Labels[0],
 				Name: blk.Labels[1],
@@ -151,11 +146,6 @@ func (parser *DefaultHCLParser) parseMainFileFromBody(body *hclsyntax.Body) ([]P
 
 		if blk.Type == "data" && len(blk.Labels) >= 2 {
 			parsed := ParseSyntaxBody(blk.Body)
-
-			ignoreChanges := extractLifecycleIgnoreChangesFromAST(blk.Body)
-			if len(ignoreChanges) > 0 {
-				parsed.Data.IgnoreChanges = append(parsed.Data.IgnoreChanges, ignoreChanges...)
-			}
 
 			ds := ParsedDataSource{
 				Type: blk.Labels[0],
@@ -170,10 +160,9 @@ func (parser *DefaultHCLParser) parseMainFileFromBody(body *hclsyntax.Body) ([]P
 
 func ParseSyntaxBody(body *hclsyntax.Body) *ParsedBlock {
 	bd := NewBlockData()
-	blk := &ParsedBlock{Data: bd}
 	bd.ParseAttributes(body)
 	bd.ParseBlocks(body)
-	return blk
+	return &ParsedBlock{Data: bd}
 }
 
 func extractIgnoreChangesFromValue(val cty.Value) []string {
@@ -191,41 +180,6 @@ func extractIgnoreChangesFromValue(val cty.Value) []string {
 		}
 	}
 	return changes
-}
-
-func extractLifecycleIgnoreChangesFromAST(body *hclsyntax.Body) []string {
-	var ignoreChanges []string
-
-	for _, block := range body.Blocks {
-		if block.Type == "lifecycle" {
-			for name, attribute := range block.Body.Attributes {
-				if name == "ignore_changes" {
-					if listExpr, ok := attribute.Expr.(*hclsyntax.TupleConsExpr); ok {
-						for _, expr := range listExpr.Exprs {
-							switch exprType := expr.(type) {
-							case *hclsyntax.ScopeTraversalExpr:
-								if len(exprType.Traversal) > 0 {
-									ignoreChanges = append(ignoreChanges, exprType.Traversal.RootName())
-								}
-							case *hclsyntax.TemplateExpr:
-								if len(exprType.Parts) == 1 {
-									if literalPart, ok := exprType.Parts[0].(*hclsyntax.LiteralValueExpr); ok && literalPart.Val.Type() == cty.String {
-										ignoreChanges = append(ignoreChanges, literalPart.Val.AsString())
-									}
-								}
-							case *hclsyntax.LiteralValueExpr:
-								if exprType.Val.Type() == cty.String {
-									ignoreChanges = append(ignoreChanges, exprType.Val.AsString())
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return ignoreChanges
 }
 
 func NormalizeSource(source string) string {

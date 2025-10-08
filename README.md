@@ -88,7 +88,7 @@ A Terraform root path must be specified either via environment variable or confi
 
 GitHub integration requires appropriate repository permissions and a valid token
 
-Validation respects Terraform's lifecycle ignore_changes directives
+Validation respects Terraform lifecycle ignore_changes directives, and diffy skips attributes that providers mark as computed-only so you can focus on values you must declare
 
 ## Contributors
 
