@@ -118,7 +118,7 @@ type ParsedDataSource struct {
 
 type BlockData struct {
 	Properties    map[string]bool
-	StaticBlocks  map[string]*ParsedBlock
+	StaticBlocks  map[string][]*ParsedBlock
 	DynamicBlocks map[string]*ParsedBlock
 	IgnoreChanges []string
 }

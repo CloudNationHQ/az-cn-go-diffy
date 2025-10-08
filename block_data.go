@@ -10,7 +10,7 @@ import (
 func NewBlockData() BlockData {
 	return BlockData{
 		Properties:    make(map[string]bool),
-		StaticBlocks:  make(map[string]*ParsedBlock),
+		StaticBlocks:  make(map[string][]*ParsedBlock),
 		DynamicBlocks: make(map[string]*ParsedBlock),
 		IgnoreChanges: []string{},
 	}
@@ -38,7 +38,7 @@ func (blockData *BlockData) ParseBlocks(body *hclsyntax.Body) {
 			}
 		default:
 			parsed := ParseSyntaxBody(block.Body)
-			blockData.StaticBlocks[block.Type] = parsed
+			blockData.StaticBlocks[block.Type] = append(blockData.StaticBlocks[block.Type], parsed)
 		}
 	}
 }
@@ -142,10 +142,10 @@ func (blockData *BlockData) validateBlocks(
 			continue
 		}
 
-		static := blockData.StaticBlocks[name]
+		staticBlocks := blockData.StaticBlocks[name]
 		dynamic := blockData.DynamicBlocks[name]
 
-		if static == nil && dynamic == nil {
+		if len(staticBlocks) == 0 && dynamic == nil {
 			*findings = append(*findings, ValidationFinding{
 				ResourceType: resourceType,
 				Path:         path,
@@ -156,15 +156,18 @@ func (blockData *BlockData) validateBlocks(
 			continue
 		}
 
-		var target *ParsedBlock
-		if static != nil {
-			target = static
-		} else {
-			target = dynamic
+		for i, blk := range staticBlocks {
+			blockPath := fmt.Sprintf("%s.%s", path, name)
+			if len(staticBlocks) > 1 {
+				blockPath = fmt.Sprintf("%s.%s[%d]", path, name, i)
+			}
+			blk.Data.Validate(resourceType, blockPath, blockType.Block, ignore, findings)
 		}
 
-		newPath := fmt.Sprintf("%s.%s", path, name)
-		target.Data.Validate(resourceType, newPath, blockType.Block, ignore, findings)
+		if dynamic != nil {
+			blockPath := fmt.Sprintf("%s.%s", path, name)
+			dynamic.Data.Validate(resourceType, blockPath, blockType.Block, ignore, findings)
+		}
 	}
 }
 
@@ -185,12 +188,8 @@ func mergeBlocks(dest, src *ParsedBlock) {
 		dest.Data.Properties[key] = true
 	}
 
-	for key, value := range src.Data.StaticBlocks {
-		if existing, ok := dest.Data.StaticBlocks[key]; ok {
-			mergeBlocks(existing, value)
-		} else {
-			dest.Data.StaticBlocks[key] = value
-		}
+	for key, blocks := range src.Data.StaticBlocks {
+		dest.Data.StaticBlocks[key] = append(dest.Data.StaticBlocks[key], blocks...)
 	}
 
 	for key, value := range src.Data.DynamicBlocks {
