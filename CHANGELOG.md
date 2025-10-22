@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.4.0](https://github.com/CloudNationHQ/az-cn-go-diffy/compare/v1.3.1...v1.4.0) (2025-10-22)
+
+
+### Features
+
+* **deps:** bump github.com/zclconf/go-cty from 1.16.2 to 1.17.0 ([#14](https://github.com/CloudNationHQ/az-cn-go-diffy/issues/14)) ([edff965](https://github.com/CloudNationHQ/az-cn-go-diffy/commit/edff9650780573f15a946ed33a2716f94499358e))
+
+
+### Bug Fixes
+
+* treat dynamic blocks as present attributes ([#25](https://github.com/CloudNationHQ/az-cn-go-diffy/issues/25)) ([02d8a0d](https://github.com/CloudNationHQ/az-cn-go-diffy/commit/02d8a0d00b7914ed108e876af16a34ded80b122e))
+
 ## [1.3.1](https://github.com/CloudNationHQ/az-cn-go-diffy/compare/v1.3.0...v1.3.1) (2025-10-08)
 
 
