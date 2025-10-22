@@ -59,6 +59,7 @@ func extractIgnoreChanges(attribute *hclsyntax.Attribute) []string {
 }
 
 func (blockData *BlockData) parseDynamicBlock(body *hclsyntax.Body, name string) {
+	blockData.Properties[name] = true
 	contentBlock := findContentBlockInBody(body)
 	parsed := ParseSyntaxBody(contentBlock)
 	if existing := blockData.DynamicBlocks[name]; existing != nil {
