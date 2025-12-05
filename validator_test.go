@@ -356,6 +356,96 @@ func TestValidateBlocksMultipleStaticAndDynamic(t *testing.T) {
 	}
 }
 
+func TestValidateTerraformSchemaSuccess(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "main.tf"), "# stub")
+
+	parser := &stubParser{
+		providerSource: "registry.terraform.io/hashicorp/azurerm",
+		resources: []ParsedResource{
+			{
+				Type: "azurerm_virtual_network",
+				Name: "test",
+				Data: BlockData{
+					Properties: map[string]bool{"location": true},
+					StaticBlocks: map[string][]*ParsedBlock{
+						"subnet": {{
+							Data: BlockData{
+								Properties:    map[string]bool{"name": true},
+								StaticBlocks:  map[string][]*ParsedBlock{},
+								DynamicBlocks: map[string]*ParsedBlock{},
+								IgnoreChanges: nil,
+							},
+						}},
+					},
+					DynamicBlocks: map[string]*ParsedBlock{},
+					IgnoreChanges: nil,
+				},
+			},
+		},
+	}
+
+	runner := &stubRunner{
+		schema: &TerraformSchema{
+			ProviderSchemas: map[string]*ProviderSchema{
+				"registry.terraform.io/hashicorp/azurerm": {
+					ResourceSchemas: map[string]*ResourceSchema{
+						"azurerm_virtual_network": {
+							Block: &SchemaBlock{
+								Attributes: map[string]*SchemaAttribute{
+									"location": {Required: true},
+								},
+								BlockTypes: map[string]*SchemaBlockType{
+									"subnet": {
+										MinItems: 1,
+										Block: &SchemaBlock{
+											Attributes: map[string]*SchemaAttribute{
+												"name": {Required: true},
+											},
+											BlockTypes: map[string]*SchemaBlockType{},
+										},
+									},
+								},
+							},
+						},
+					},
+					DataSourceSchemas: map[string]*ResourceSchema{},
+				},
+			},
+		},
+	}
+
+	findings, err := ValidateTerraformSchema(&SimpleLogger{}, dir, "", parser, runner)
+	if err != nil {
+		t.Fatalf("ValidateTerraformSchema returned error: %v", err)
+	}
+	if len(findings) != 0 {
+		t.Fatalf("expected no findings, got %d", len(findings))
+	}
+}
+
+func TestValidateTerraformSchemaInitError(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "main.tf"), "# stub")
+
+	parser := &stubParser{
+		providerSource: "registry.terraform.io/hashicorp/azurerm",
+		resources:      nil,
+	}
+
+	runner := &stubRunner{schema: &TerraformSchema{}}
+	runnerFail := &failingRunner{}
+
+	if _, err := ValidateTerraformSchema(&SimpleLogger{}, dir, "", parser, runnerFail); err == nil {
+		t.Fatalf("expected init error")
+	}
+
+	// Ensure success path still works with stub runner
+	if _, err := ValidateTerraformSchema(&SimpleLogger{}, dir, "", parser, runner); err != nil {
+		t.Fatalf("unexpected error with stub runner: %v", err)
+	}
+}
+
 func TestWalkTerraformFiles(t *testing.T) {
 	dir := t.TempDir()
 

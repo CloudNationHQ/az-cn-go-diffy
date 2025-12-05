@@ -86,6 +86,69 @@ exit 1
 	}
 }
 
+func TestValidateTerraformSchemaInDirectory_NoMain(t *testing.T) {
+	dir := t.TempDir()
+	findings, err := ValidateTerraformSchemaInDirectory(&SimpleLogger{}, dir, "")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(findings) != 0 {
+		t.Fatalf("expected no findings when main.tf is absent, got %d", len(findings))
+	}
+}
+
+func TestValidateTerraformSchemaInDirectoryWithOptions_UsesTerraformCLI(t *testing.T) {
+	helperDir := t.TempDir()
+	logFile := filepath.Join(helperDir, "tf.log")
+	script := filepath.Join(helperDir, "terraform")
+
+	writeExecutable(t, script, `#!/bin/sh
+echo "$1" >> "`+logFile+`"
+if [ "$1" = "init" ]; then
+  exit 0
+fi
+if [ "$1" = "providers" ] && [ "$2" = "schema" ]; then
+  cat <<'EOF'
+{"provider_schemas":{"registry.terraform.io/hashicorp/azurerm":{"resource_schemas":{"azurerm_resource_group":{"block":{"attributes":{"name":{"required":true},"location":{"required":true}},"block_types":{}}}},"data_source_schemas":{}}}}
+EOF
+  exit 0
+fi
+echo "unexpected args: $@" >&2
+exit 1
+`)
+	t.Setenv("PATH", helperDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "main.tf"), `
+terraform {
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 4.0"
+    }
+  }
+}
+
+resource "azurerm_resource_group" "rg" {
+  name     = "rg1"
+  location = "westeurope"
+}
+`)
+
+	findings, err := ValidateTerraformSchemaInDirectoryWithOptions(&SimpleLogger{}, dir, "", nil, nil)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(findings) != 0 {
+		t.Fatalf("expected no findings, got %d", len(findings))
+	}
+
+	logs := strings.Split(strings.TrimSpace(readFile(t, logFile)), "\n")
+	if len(logs) != 2 || logs[0] != "init" || logs[1] != "providers" {
+		t.Fatalf("expected init and providers schema calls, got %v", logs)
+	}
+}
+
 func TestDefaultTerraformRunnerInitError(t *testing.T) {
 	helperDir := t.TempDir()
 	script := filepath.Join(helperDir, "terraform")
