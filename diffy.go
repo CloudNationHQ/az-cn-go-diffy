@@ -71,8 +71,15 @@ func validateProject(opts *SchemaValidatorOptions) ([]ValidationFinding, error) 
 		return nil, fmt.Errorf("failed to resolve absolute path for %s: %w", opts.TerraformRoot, err)
 	}
 
-	parser := NewHCLParser()
-	runner := NewTerraformRunner()
+	parser := opts.Parser
+	if parser == nil {
+		parser = NewHCLParser()
+	}
+
+	runner := opts.TerraformRunner
+	if runner == nil {
+		runner = NewTerraformRunner()
+	}
 
 	rootFindings, err := ValidateTerraformSchemaWithOptions(
 		opts.Logger,
