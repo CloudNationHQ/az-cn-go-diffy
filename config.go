@@ -15,6 +15,8 @@ type SchemaValidatorOptions struct {
 	Silent              bool
 	ExcludedResources   []string
 	ExcludedDataSources []string
+	Parser              HCLParser
+	TerraformRunner     TerraformRunner
 }
 
 type SchemaValidatorOption func(*SchemaValidatorOptions)
@@ -41,5 +43,17 @@ func WithExcludedResources(resources ...string) SchemaValidatorOption {
 func WithExcludedDataSources(dataSources ...string) SchemaValidatorOption {
 	return func(opts *SchemaValidatorOptions) {
 		opts.ExcludedDataSources = append(opts.ExcludedDataSources, dataSources...)
+	}
+}
+
+func WithParser(parser HCLParser) SchemaValidatorOption {
+	return func(opts *SchemaValidatorOptions) {
+		opts.Parser = parser
+	}
+}
+
+func WithTerraformRunner(runner TerraformRunner) SchemaValidatorOption {
+	return func(opts *SchemaValidatorOptions) {
+		opts.TerraformRunner = runner
 	}
 }
