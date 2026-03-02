@@ -1,11 +1,11 @@
 module github.com/cloudnationhq/az-cn-go-diffy
 
-go 1.24.1
+go 1.25
 
 require (
 	github.com/google/go-cmp v0.6.0
 	github.com/hashicorp/hcl/v2 v2.23.0
-	github.com/zclconf/go-cty v1.17.0
+	github.com/zclconf/go-cty v1.18.0
 )
 
 require (
