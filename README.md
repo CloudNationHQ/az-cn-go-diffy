@@ -78,6 +78,8 @@ Configure diffy through environment variables for CI/CD pipelines:
 
 `EXCLUDED_DATA_SOURCES`: Comma-separated list of data source types to exclude
 
+`EXCLUDED_PROPERTIES`: Comma-separated list of `resource_type.property` entries to exclude, e.g. `azurerm_key_vault.access_policy`
+
 `GITHUB_TOKEN`: Personal access token for GitHub issue creation (optional)
 
 ## Notes
@@ -89,6 +91,8 @@ A Terraform root path must be specified either via environment variable or confi
 GitHub integration requires appropriate repository permissions and a valid token
 
 Validation respects Terraform lifecycle ignore_changes directives, and diffy skips attributes that providers mark as computed-only so you can focus on values you must declare
+
+Data sources only report missing required arguments, since optional data source arguments are lookup filters
 
 ## Contributors
 

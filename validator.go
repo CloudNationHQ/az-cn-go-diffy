@@ -109,6 +109,10 @@ func (validator *DefaultSchemaValidator) validateEntities(
 		entity.Data.Validate(entity.Type, "root", resSchema.Block, entity.Data.IgnoreChanges, &localFindings)
 
 		for i := range localFindings {
+			if isDataSource && !localFindings[i].Required {
+				continue
+			}
+
 			shouldExclude := false
 			for _, ignored := range entity.Data.IgnoreChanges {
 				if strings.EqualFold(ignored, localFindings[i].Name) {
@@ -197,6 +201,20 @@ func filterDataSources(dataSources []ParsedDataSource, excluded []string) []Pars
 	for _, dataSource := range dataSources {
 		if !slices.Contains(excluded, dataSource.Type) {
 			filtered = append(filtered, dataSource)
+		}
+	}
+	return filtered
+}
+
+func filterProperties(findings []ValidationFinding, excluded []string) []ValidationFinding {
+	if len(excluded) == 0 {
+		return findings
+	}
+
+	var filtered []ValidationFinding
+	for _, finding := range findings {
+		if !slices.Contains(excluded, finding.ResourceType+"."+finding.Name) {
+			filtered = append(filtered, finding)
 		}
 	}
 	return filtered
