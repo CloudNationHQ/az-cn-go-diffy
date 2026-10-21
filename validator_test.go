@@ -697,3 +697,26 @@ func TestFilterProperties(t *testing.T) {
 		t.Fatalf("expected no filtering without exclusions, got %d", len(got))
 	}
 }
+
+func TestFilterPropertiesMatchesFullPath(t *testing.T) {
+	findings := []ValidationFinding{
+		{ResourceType: "azurerm_kubernetes_cluster", Path: "root", Name: "tags"},
+		{ResourceType: "azurerm_kubernetes_cluster", Path: "root.default_node_pool", Name: "tags"},
+		{ResourceType: "azurerm_kubernetes_cluster", Path: "root.default_node_pool[1]", Name: "tags"},
+	}
+
+	rootOnly := filterProperties(findings, []string{"azurerm_kubernetes_cluster.tags"})
+	if len(rootOnly) != 2 {
+		t.Fatalf("expected root exclusion to keep 2 nested findings, got %+v", rootOnly)
+	}
+	for _, f := range rootOnly {
+		if f.Path == "root" {
+			t.Fatalf("root tags finding was not filtered")
+		}
+	}
+
+	nestedOnly := filterProperties(findings, []string{"azurerm_kubernetes_cluster.default_node_pool.tags"})
+	if len(nestedOnly) != 1 || nestedOnly[0].Path != "root" {
+		t.Fatalf("expected nested exclusion to keep only the root finding, got %+v", nestedOnly)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -213,11 +214,22 @@ func filterProperties(findings []ValidationFinding, excluded []string) []Validat
 
 	var filtered []ValidationFinding
 	for _, finding := range findings {
-		if !slices.Contains(excluded, finding.ResourceType+"."+finding.Name) {
+		if !slices.Contains(excluded, propertyPath(finding)) {
 			filtered = append(filtered, finding)
 		}
 	}
 	return filtered
+}
+
+var blockIndexPattern = regexp.MustCompile(`\[\d+\]`)
+
+func propertyPath(finding ValidationFinding) string {
+	path := strings.TrimPrefix(strings.TrimPrefix(finding.Path, "root"), ".")
+	path = blockIndexPattern.ReplaceAllString(path, "")
+	if path == "" {
+		return finding.ResourceType + "." + finding.Name
+	}
+	return finding.ResourceType + "." + path + "." + finding.Name
 }
 
 func walkTerraformFiles(dir string) ([]string, error) {

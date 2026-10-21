@@ -78,7 +78,7 @@ Configure diffy through environment variables for CI/CD pipelines:
 
 `EXCLUDED_DATA_SOURCES`: Comma-separated list of data source types to exclude
 
-`EXCLUDED_PROPERTIES`: Comma-separated list of `resource_type.property` entries to exclude, e.g. `azurerm_key_vault.access_policy`
+`EXCLUDED_PROPERTIES`: Comma-separated list of `resource_type.property` entries to exclude, e.g. `azurerm_key_vault.access_policy`. Nested properties use their full block path, e.g. `azurerm_kubernetes_cluster.default_node_pool.tags`
 
 `GITHUB_TOKEN`: Personal access token for GitHub issue creation (optional)
 
