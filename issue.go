@@ -111,10 +111,38 @@ func (manager *GitHubIssueManager) CloseExistingIssuesIfEmpty(ctx context.Contex
 }
 
 func (manager *GitHubIssueManager) findExistingIssue(ctx context.Context, title string) (int, string, error) {
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?state=open", manager.RepoOwner, manager.RepoName)
+	const perPage = 100
+
+	for page := 1; ; page++ {
+		issues, err := manager.listOpenIssues(ctx, page, perPage)
+		if err != nil {
+			return 0, "", err
+		}
+
+		for _, issue := range issues {
+			if issue.PullRequest == nil && issue.Title == title {
+				return issue.Number, issue.Body, nil
+			}
+		}
+
+		if len(issues) < perPage {
+			return 0, "", nil
+		}
+	}
+}
+
+type githubIssue struct {
+	Number      int             `json:"number"`
+	Title       string          `json:"title"`
+	Body        string          `json:"body"`
+	PullRequest json.RawMessage `json:"pull_request"`
+}
+
+func (manager *GitHubIssueManager) listOpenIssues(ctx context.Context, page, perPage int) ([]githubIssue, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?state=open&per_page=%d&page=%d", manager.RepoOwner, manager.RepoName, perPage, page)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
-		return 0, "", &GitHubError{
+		return nil, &GitHubError{
 			Operation: "find existing issue",
 			Message:   "failed to create request",
 			Err:       err,
@@ -126,7 +154,7 @@ func (manager *GitHubIssueManager) findExistingIssue(ctx context.Context, title 
 
 	resp, err := manager.Client.Do(req)
 	if err != nil {
-		return 0, "", &GitHubError{
+		return nil, &GitHubError{
 			Operation: "find existing issue",
 			Message:   "request failed",
 			Err:       err,
@@ -136,34 +164,23 @@ func (manager *GitHubIssueManager) findExistingIssue(ctx context.Context, title 
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return 0, "", &GitHubError{
+		return nil, &GitHubError{
 			Operation: "find existing issue",
 			Message:   fmt.Sprintf("API error: %s", resp.Status),
 			Err:       fmt.Errorf("response: %s", string(body)),
 		}
 	}
 
-	var issues []struct {
-		Number int    `json:"number"`
-		Title  string `json:"title"`
-		Body   string `json:"body"`
-	}
-
+	var issues []githubIssue
 	if err := json.NewDecoder(resp.Body).Decode(&issues); err != nil {
-		return 0, "", &GitHubError{
+		return nil, &GitHubError{
 			Operation: "find existing issue",
 			Message:   "failed to decode response",
 			Err:       err,
 		}
 	}
 
-	for _, issue := range issues {
-		if issue.Title == title {
-			return issue.Number, issue.Body, nil
-		}
-	}
-
-	return 0, "", nil
+	return issues, nil
 }
 
 func (manager *GitHubIssueManager) updateIssue(ctx context.Context, issueNumber int, body string) error {

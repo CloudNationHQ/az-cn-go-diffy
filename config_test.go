@@ -134,3 +134,13 @@ func TestOptionChaining(t *testing.T) {
 		t.Error("TerraformRunner not set correctly")
 	}
 }
+
+func TestWithExcludedProperties(t *testing.T) {
+	opts := &SchemaValidatorOptions{}
+
+	WithExcludedProperties("azurerm_key_vault.access_policy", "azurerm_role_assignment.condition")(opts)
+
+	if len(opts.ExcludedProperties) != 2 {
+		t.Errorf("ExcludedProperties length = %d, want 2", len(opts.ExcludedProperties))
+	}
+}

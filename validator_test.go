@@ -564,6 +564,7 @@ func TestValidateProjectWithSubmodules(t *testing.T) {
 type stubParser struct {
 	providerSource string
 	resources      []ParsedResource
+	dataSources    []ParsedDataSource
 }
 
 func (p *stubParser) ParseProviderRequirements(_ context.Context, _ string) (map[string]ProviderConfig, error) {
@@ -577,7 +578,7 @@ func (p *stubParser) ParseMainFile(ctx context.Context, filename string) ([]Pars
 }
 
 func (p *stubParser) ParseTerraformFiles(_ context.Context, _ []string) ([]ParsedResource, []ParsedDataSource, error) {
-	return p.resources, nil, nil
+	return p.resources, p.dataSources, nil
 }
 
 type stubRunner struct {
@@ -633,4 +634,89 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestValidateDataSourcesReportsRequiredOnly(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "main.tf"), "# stub")
+
+	parser := &stubParser{
+		providerSource: "registry.terraform.io/hashicorp/azurerm",
+		dataSources: []ParsedDataSource{
+			{Type: "azurerm_subscription", Name: "current", Data: NewBlockData()},
+		},
+	}
+
+	runner := &stubRunner{
+		schema: &TerraformSchema{
+			ProviderSchemas: map[string]*ProviderSchema{
+				"registry.terraform.io/hashicorp/azurerm": {
+					ResourceSchemas: map[string]*ResourceSchema{},
+					DataSourceSchemas: map[string]*ResourceSchema{
+						"azurerm_subscription": {
+							Block: &SchemaBlock{
+								Attributes: map[string]*SchemaAttribute{
+									"subscription_id": {Optional: true, Computed: true},
+									"name":            {Required: true},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	findings, err := ValidateTerraformSchema(&SimpleLogger{}, dir, "", parser, runner)
+	if err != nil {
+		t.Fatalf("ValidateTerraformSchema returned error: %v", err)
+	}
+	if len(findings) != 1 || findings[0].Name != "name" || !findings[0].IsDataSource {
+		t.Fatalf("expected only the required data source finding, got %+v", findings)
+	}
+}
+
+func TestFilterProperties(t *testing.T) {
+	findings := []ValidationFinding{
+		{ResourceType: "azurerm_key_vault", Name: "access_policy"},
+		{ResourceType: "azurerm_key_vault", Name: "tags"},
+		{ResourceType: "azurerm_role_assignment", Name: "access_policy"},
+	}
+
+	filtered := filterProperties(findings, []string{"azurerm_key_vault.access_policy"})
+	if len(filtered) != 2 {
+		t.Fatalf("expected 2 findings, got %d", len(filtered))
+	}
+	for _, f := range filtered {
+		if f.ResourceType == "azurerm_key_vault" && f.Name == "access_policy" {
+			t.Fatalf("excluded property was not filtered")
+		}
+	}
+
+	if got := filterProperties(findings, nil); len(got) != len(findings) {
+		t.Fatalf("expected no filtering without exclusions, got %d", len(got))
+	}
+}
+
+func TestFilterPropertiesMatchesFullPath(t *testing.T) {
+	findings := []ValidationFinding{
+		{ResourceType: "azurerm_kubernetes_cluster", Path: "root", Name: "tags"},
+		{ResourceType: "azurerm_kubernetes_cluster", Path: "root.default_node_pool", Name: "tags"},
+		{ResourceType: "azurerm_kubernetes_cluster", Path: "root.default_node_pool[1]", Name: "tags"},
+	}
+
+	rootOnly := filterProperties(findings, []string{"azurerm_kubernetes_cluster.tags"})
+	if len(rootOnly) != 2 {
+		t.Fatalf("expected root exclusion to keep 2 nested findings, got %+v", rootOnly)
+	}
+	for _, f := range rootOnly {
+		if f.Path == "root" {
+			t.Fatalf("root tags finding was not filtered")
+		}
+	}
+
+	nestedOnly := filterProperties(findings, []string{"azurerm_kubernetes_cluster.default_node_pool.tags"})
+	if len(nestedOnly) != 1 || nestedOnly[0].Path != "root" {
+		t.Fatalf("expected nested exclusion to keep only the root finding, got %+v", nestedOnly)
+	}
 }

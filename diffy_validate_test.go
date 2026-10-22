@@ -174,3 +174,52 @@ func (f *failingRunner) Init(_ context.Context, _ string) error {
 func (f *failingRunner) GetSchema(_ context.Context, _ string) (*TerraformSchema, error) {
 	return nil, fmt.Errorf("should not be called")
 }
+
+func TestValidateSchemaAppliesEnvExcludedProperties(t *testing.T) {
+	root := t.TempDir()
+	writeTestFile(t, filepath.Join(root, "main.tf"), "# test")
+	t.Setenv("EXCLUDED_PROPERTIES", "azurerm_key_vault.access_policy, azurerm_key_vault.tags")
+
+	parser := &validateStubParser{
+		providerSource: "registry.terraform.io/hashicorp/azurerm",
+		resources: []ParsedResource{
+			{Type: "azurerm_key_vault", Name: "this", Data: NewBlockData()},
+		},
+	}
+	runner := &validateStubRunner{
+		schema: &TerraformSchema{
+			ProviderSchemas: map[string]*ProviderSchema{
+				parser.providerSource: {
+					ResourceSchemas: map[string]*ResourceSchema{
+						"azurerm_key_vault": {
+							Block: &SchemaBlock{
+								Attributes: map[string]*SchemaAttribute{
+									"tags":                          {Optional: true},
+									"public_network_access_enabled": {Optional: true},
+								},
+								BlockTypes: map[string]*SchemaBlockType{
+									"access_policy": {Block: &SchemaBlock{}},
+								},
+							},
+						},
+					},
+					DataSourceSchemas: map[string]*ResourceSchema{},
+				},
+			},
+		},
+	}
+
+	findings, err := ValidateSchema(
+		WithTerraformRoot(root),
+		WithParser(parser),
+		WithTerraformRunner(runner),
+		func(opts *SchemaValidatorOptions) { opts.Silent = true },
+	)
+	if err != nil {
+		t.Fatalf("ValidateSchema returned error: %v", err)
+	}
+
+	if len(findings) != 1 || findings[0].Name != "public_network_access_enabled" {
+		t.Fatalf("expected only public_network_access_enabled finding, got %+v", findings)
+	}
+}

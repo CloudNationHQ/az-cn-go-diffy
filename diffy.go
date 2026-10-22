@@ -42,6 +42,14 @@ func ValidateSchema(options ...SchemaValidatorOption) ([]ValidationFinding, erro
 		opts.ExcludedDataSources = append(opts.ExcludedDataSources, dataSources...)
 	}
 
+	if envExcludedProperties := os.Getenv("EXCLUDED_PROPERTIES"); envExcludedProperties != "" {
+		properties := strings.Split(envExcludedProperties, ",")
+		for i, p := range properties {
+			properties[i] = strings.TrimSpace(p)
+		}
+		opts.ExcludedProperties = append(opts.ExcludedProperties, properties...)
+	}
+
 	if opts.TerraformRoot == "" {
 		return nil, fmt.Errorf("terraform root path not specified - set TERRAFORM_ROOT environment variable or use WithTerraformRoot option")
 	}
@@ -153,7 +161,7 @@ func validateProject(opts *SchemaValidatorOptions) ([]ValidationFinding, error) 
 
 	cleanupTerraformArtifacts(absRoot)
 
-	deduplicatedFindings := DeduplicateFindings(allFindings)
+	deduplicatedFindings := DeduplicateFindings(filterProperties(allFindings, opts.ExcludedProperties))
 
 	return deduplicatedFindings, nil
 }

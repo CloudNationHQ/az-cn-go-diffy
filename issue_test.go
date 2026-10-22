@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -91,6 +92,68 @@ func TestCreateOrUpdateIssue_UpdatesExisting(t *testing.T) {
 
 	if len(calls) != 2 {
 		t.Fatalf("expected 2 API calls, got %d", len(calls))
+	}
+}
+
+func TestCreateOrUpdateIssue_PaginatesAndSkipsPullRequests(t *testing.T) {
+	var firstPage strings.Builder
+	firstPage.WriteString("[")
+	for i := 0; i < 100; i++ {
+		if i > 0 {
+			firstPage.WriteString(",")
+		}
+		firstPage.WriteString(`{"number":` + strconv.Itoa(i+100) + `,"title":"Generated schema validation","pull_request":{"url":"x"}}`)
+	}
+	firstPage.WriteString("]")
+
+	var calls []recordedCall
+	client := newStubHTTPClient(t, &calls, []httpHandlerStep{
+		{
+			method: "GET",
+			path:   "/repos/o/r/issues",
+			status: http.StatusOK,
+			body:   firstPage.String(),
+			check: func(t *testing.T, r *http.Request) {
+				if got := r.URL.Query().Get("page"); got != "1" {
+					t.Fatalf("expected page 1, got %q", got)
+				}
+			},
+		},
+		{
+			method: "GET",
+			path:   "/repos/o/r/issues",
+			status: http.StatusOK,
+			body:   `[{"number":7,"title":"Generated schema validation","body":""}]`,
+			check: func(t *testing.T, r *http.Request) {
+				if got := r.URL.Query().Get("page"); got != "2" {
+					t.Fatalf("expected page 2, got %q", got)
+				}
+			},
+		},
+		{
+			method: "PATCH",
+			path:   "/repos/o/r/issues/7",
+			status: http.StatusOK,
+		},
+	})
+
+	manager := &GitHubIssueManager{
+		GitHubConfig: GitHubConfig{
+			RepoOwner: "o",
+			RepoName:  "r",
+			Token:     "TOKEN",
+		},
+		Client: client,
+	}
+
+	if err := manager.CreateOrUpdateIssue(context.Background(), []ValidationFinding{
+		{ResourceType: "r1", Path: "root.attr", Name: "bar"},
+	}); err != nil {
+		t.Fatalf("CreateOrUpdateIssue returned error: %v", err)
+	}
+
+	if len(calls) != 3 {
+		t.Fatalf("expected 3 API calls, got %d", len(calls))
 	}
 }
 

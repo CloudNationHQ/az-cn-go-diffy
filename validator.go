@@ -6,6 +6,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -109,6 +110,10 @@ func (validator *DefaultSchemaValidator) validateEntities(
 		entity.Data.Validate(entity.Type, "root", resSchema.Block, entity.Data.IgnoreChanges, &localFindings)
 
 		for i := range localFindings {
+			if isDataSource && !localFindings[i].Required {
+				continue
+			}
+
 			shouldExclude := false
 			for _, ignored := range entity.Data.IgnoreChanges {
 				if strings.EqualFold(ignored, localFindings[i].Name) {
@@ -200,6 +205,31 @@ func filterDataSources(dataSources []ParsedDataSource, excluded []string) []Pars
 		}
 	}
 	return filtered
+}
+
+func filterProperties(findings []ValidationFinding, excluded []string) []ValidationFinding {
+	if len(excluded) == 0 {
+		return findings
+	}
+
+	var filtered []ValidationFinding
+	for _, finding := range findings {
+		if !slices.Contains(excluded, propertyPath(finding)) {
+			filtered = append(filtered, finding)
+		}
+	}
+	return filtered
+}
+
+var blockIndexPattern = regexp.MustCompile(`\[\d+\]`)
+
+func propertyPath(finding ValidationFinding) string {
+	path := strings.TrimPrefix(strings.TrimPrefix(finding.Path, "root"), ".")
+	path = blockIndexPattern.ReplaceAllString(path, "")
+	if path == "" {
+		return finding.ResourceType + "." + finding.Name
+	}
+	return finding.ResourceType + "." + path + "." + finding.Name
 }
 
 func walkTerraformFiles(dir string) ([]string, error) {
