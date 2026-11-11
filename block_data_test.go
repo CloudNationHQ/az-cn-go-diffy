@@ -1,6 +1,7 @@
 package diffy
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -148,6 +149,26 @@ func TestBlockDataValidateReportsMissingParts(t *testing.T) {
 
 	if diff := cmp.Diff(want, findings, cmpopts.SortSlices(lessFinding)); diff != "" {
 		t.Fatalf("Unexpected validation findings (-want +got):\n%s", diff)
+	}
+}
+
+func TestBlockDataValidateSkipsDeprecatedNestedBlock(t *testing.T) {
+	var schema SchemaBlock
+	if err := json.Unmarshal([]byte(`{
+		"block_types": {
+			"features": {"nesting_mode": "list", "block": {"attributes": {"enterprise": {"optional": true}}, "deprecated": true}},
+			"feature_tags": {"nesting_mode": "list", "block": {"attributes": {"enterprise": {"optional": true}}}}
+		}
+	}`), &schema); err != nil {
+		t.Fatalf("failed to parse schema: %v", err)
+	}
+
+	bd := NewBlockData()
+	var findings []ValidationFinding
+	bd.Validate("azuread_service_principal", "root", &schema, nil, &findings)
+
+	if len(findings) != 1 || findings[0].Name != "feature_tags" {
+		t.Fatalf("expected only the feature_tags finding, got %+v", findings)
 	}
 }
 
