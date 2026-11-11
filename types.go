@@ -72,6 +72,7 @@ type ResourceSchema struct {
 type SchemaBlock struct {
 	Attributes map[string]*SchemaAttribute `json:"attributes"`
 	BlockTypes map[string]*SchemaBlockType `json:"block_types"`
+	Deprecated bool                        `json:"deprecated"`
 }
 
 type SchemaAttribute struct {
