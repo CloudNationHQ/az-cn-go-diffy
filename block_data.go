@@ -166,7 +166,7 @@ func (blockData *BlockData) validateBlocks(
 			continue
 		}
 
-		if blockType.Deprecated {
+		if blockType.Block != nil && blockType.Block.Deprecated {
 			continue
 		}
 

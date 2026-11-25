@@ -72,6 +72,7 @@ type ResourceSchema struct {
 type SchemaBlock struct {
 	Attributes map[string]*SchemaAttribute `json:"attributes"`
 	BlockTypes map[string]*SchemaBlockType `json:"block_types"`
+	Deprecated bool                        `json:"deprecated"`
 }
 
 type SchemaAttribute struct {
@@ -82,11 +83,10 @@ type SchemaAttribute struct {
 }
 
 type SchemaBlockType struct {
-	Nesting    string       `json:"nesting"`
-	MinItems   int          `json:"min_items"`
-	MaxItems   int          `json:"max_items"`
-	Block      *SchemaBlock `json:"block"`
-	Deprecated bool         `json:"deprecated"`
+	Nesting  string       `json:"nesting"`
+	MinItems int          `json:"min_items"`
+	MaxItems int          `json:"max_items"`
+	Block    *SchemaBlock `json:"block"`
 }
 
 type ValidationFinding struct {
